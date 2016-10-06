@@ -33,6 +33,7 @@ protected:
 
     PackerBase(SequenceEnumeratorPtr sequenceEnumerator,
                const std::vector<StreamDescriptionPtr>& streams,
+               size_t maxNumberOfInvalidSequences,
                size_t numberOfBuffers);
 
     typedef std::vector<SequenceDataPtr> StreamBatch;
@@ -54,6 +55,9 @@ protected:
     // specifies the offset of the first value from the given sample in the sequence data/ array 
     // (sampleOffset is equal to the sum of sample sizes of all preceding samples).
     void PackDenseSample(char* destination, SequenceDataPtr sequence, size_t sampleOffset, size_t sampleSize);
+
+    // Removes invalid sequences.
+    void CleanSequences(Sequences& sequences);
 
     SequenceEnumeratorPtr m_sequenceEnumerator;
 
@@ -83,6 +87,12 @@ protected:
 
     // Current config.
     ReaderConfiguration m_config;
+
+    // Number of sequences cleaned.
+    size_t m_numberOfCleanedSequences;
+
+    // Max number of allowed invalid sequences.
+    size_t m_maxNumberOfInvalidSequences;
 
 public:
     // Sets current epoch configuration.

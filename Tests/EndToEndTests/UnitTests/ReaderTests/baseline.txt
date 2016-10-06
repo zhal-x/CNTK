@@ -304,7 +304,11 @@ Current working directory is now: d:/TestPreparation/Speech/AN4Corpus/v0
 reading script file ./glob_0000.scp ... 948 entries
 total 132 state names in state list ./state.list
 htkmlfreader: reading MLF file ./glob_0000.mlf ... total 948 entries
+<<<<<<< HEAD
 biggrowablevectorarray: creating disk backup store at 'F:\cygwin64\tmp\CNT70F8.tmp'
+=======
+biggrowablevectorarray: creating disk backup store at 'F:\cygwin64\tmp\CNTA2AC.tmp'
+>>>>>>> Allowing deserializers return invalid sequences
 minibatchframesourcemulti: reading 1 feature sets and 1 label sets..................................................................................................
 minibatchframesourcemulti: read label set 0: 129 classes
 
@@ -313,11 +317,19 @@ biggrowablevectorarray: disk backup store created, 252734 frames, 37748736 bytes
 minibatchiterator: epoch 0: frames [0..500] (first utterance at frame 0), data subset 0 of 1, with 1 datapasses
 recoverblock: recovering feature block 0 [0..65535)
 minibatchiterator: epoch 1: frames [500..1000] (first utterance at frame 500), data subset 0 of 1, with 1 datapasses
+<<<<<<< HEAD
 biggrowablevectorarray: deleted disk backup store at 'F:\cygwin64\tmp\CNT70F8.tmp'
 Set current path to: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Current working directory: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Executable path: C:/repo/cntk_github3/CNTK/x64/release
 Test path: C:/repo/cntk_github3/CNTK/Tests/UnitTests/ReaderTests
+=======
+biggrowablevectorarray: deleted disk backup store at 'F:\cygwin64\tmp\CNTA2AC.tmp'
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+>>>>>>> Allowing deserializers return invalid sequences
 Retrieving environment variable: CNTK_EXTERNAL_TESTDATA_SOURCE_DIRECTORY
 Set current path to: d:\TestPreparation/Speech/AN4Corpus/v0
 Current working directory is now: d:/TestPreparation/Speech/AN4Corpus/v0
@@ -462,7 +474,11 @@ Current working directory is now: d:/TestPreparation/Speech/AN4Corpus/v0
 reading script file ./glob_0000.scp ... 948 entries
 total 132 state names in state list ./state.list
 htkmlfreader: reading MLF file ./glob_0000.mlf ... total 948 entries
+<<<<<<< HEAD
 biggrowablevectorarray: creating disk backup store at 'F:\cygwin64\tmp\CNTEC33.tmp'
+=======
+biggrowablevectorarray: creating disk backup store at 'F:\cygwin64\tmp\CNT1DC9.tmp'
+>>>>>>> Allowing deserializers return invalid sequences
 minibatchframesourcemulti: reading 1 feature sets and 1 label sets..................................................................................................
 minibatchframesourcemulti: read label set 0: 129 classes
 
@@ -471,11 +487,19 @@ biggrowablevectorarray: disk backup store created, 252734 frames, 37748736 bytes
 minibatchiterator: epoch 0: frames [0..500] (first utterance at frame 0), data subset 0 of 1, with 1 datapasses
 recoverblock: recovering feature block 0 [0..65535)
 minibatchiterator: epoch 1: frames [500..1000] (first utterance at frame 500), data subset 0 of 1, with 1 datapasses
+<<<<<<< HEAD
 biggrowablevectorarray: deleted disk backup store at 'F:\cygwin64\tmp\CNTEC33.tmp'
 Set current path to: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Current working directory: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Executable path: C:/repo/cntk_github3/CNTK/x64/release
 Test path: C:/repo/cntk_github3/CNTK/Tests/UnitTests/ReaderTests
+=======
+biggrowablevectorarray: deleted disk backup store at 'F:\cygwin64\tmp\CNT1DC9.tmp'
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+>>>>>>> Allowing deserializers return invalid sequences
 Retrieving environment variable: CNTK_EXTERNAL_TESTDATA_SOURCE_DIRECTORY
 Set current path to: d:\TestPreparation/Speech/AN4Corpus/v0
 Current working directory is now: d:/TestPreparation/Speech/AN4Corpus/v0
@@ -1041,6 +1065,7 @@ HTKDataDeserializer::HTKDataDeserializer: determined feature kind as 33-dimensio
 total 132 state names in state list ./state.list
 htkmlfreader: reading MLF file ./glob_0000.mlf ... total 948 entries
 MLFDataDeserializer::MLFDataDeserializer: 948 utterances with 252734 frames in 129 classes
+<<<<<<< HEAD
 Set current path to: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Current working directory: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Executable path: C:/repo/cntk_github3/CNTK/x64/release
@@ -1095,6 +1120,68 @@ Executable path: C:/repo/cntk_github3/CNTK/x64/release
 Test path: C:/repo/cntk_github3/CNTK/Tests/UnitTests/ReaderTests
 Set current path to: C:/repo/cntk_github3/CNTK/Tests/UnitTests/ReaderTests/Data
 Current working directory is now: C:/repo/cntk_github3/CNTK/Tests/UnitTests/ReaderTests/Data
+=======
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Current working directory: C:/repo/cntk_github6/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
+Executable path: C:/repo/cntk_github6/CNTK/x64/release
+Test path: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests
+Set current path to: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+Current working directory is now: C:/repo/cntk_github6/CNTK/Tests/UnitTests/ReaderTests/Data
+>>>>>>> Allowing deserializers return invalid sequences
 Sequence missing.jpg is not found in container images/simple.zip.
 Set current path to: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
 Current working directory: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/ReaderTests
@@ -1261,11 +1348,15 @@ Set current path to: C:/repo/cntk_github3/CNTK/Tests/EndToEndTests/UnitTests/Rea
 
 Test module "ReaderTests" has passed with:
   113 test cases out of 113 passed
+<<<<<<< HEAD
   16973519 assertions out of 16973519 passed
+=======
+  16973590 assertions out of 16973590 passed
+>>>>>>> Allowing deserializers return invalid sequences
 
   Test suite "ReaderTestSuite" has passed with:
-    91 test cases out of 91 passed
-    16971334 assertions out of 16971334 passed
+    92 test cases out of 92 passed
+    16971335 assertions out of 16971335 passed
 
     Test case "ReaderTestSuite/CNTKBinaryReader_sparse_seq" has passed with:
       1 assertion out of 1 passed
@@ -1494,6 +1585,9 @@ Test module "ReaderTests" has passed with:
 
     Test case "ReaderTestSuite/ImageSimpleCompositeAndBase64" has passed with:
       2 assertions out of 2 passed
+
+    Test case "ReaderTestSuite/InvalidImageSimpleCompositeAndBase64" has passed with:
+      1 assertion out of 1 passed
 
     Test case "ReaderTestSuite/ImageAndImageReaderSimple" has passed with:
       1 assertion out of 1 passed

@@ -6,8 +6,8 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
-#include "SequenceData.h"
 #include <numeric>
+#include "SequenceData.h"
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -51,7 +51,7 @@ namespace Microsoft { namespace MSR { namespace CNTK {
         }
         return resultType;
     }
-
+    
     // A helper interface to generate a typed label in a sparse format for categories.
     // It is represented as an array indexed by the category, containing zero values for all categories the sequence does not belong to,
     // and a single one for a category it belongs to: [ 0 .. 0.. 1 .. 0 ]

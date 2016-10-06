@@ -16,11 +16,12 @@ public:
     FramePacker(
         SequenceEnumeratorPtr sequenceEnumerator,
         const std::vector<StreamDescriptionPtr>& streams,
-        size_t numberOfBuffers = 2,
-        bool useLocalTimeline = false) :
-        SequencePacker(sequenceEnumerator, streams, numberOfBuffers, useLocalTimeline)
+        bool useLocalTimeline = false,
+        size_t maxNumberOfInvalidSequences = 0,
+        size_t numberOfBuffers = 2) :
+        SequencePacker(sequenceEnumerator, streams, useLocalTimeline, maxNumberOfInvalidSequences, numberOfBuffers)
     {}
-
+s
 protected:
     MBLayoutPtr CreateMBLayout(const StreamBatch& batch) override;
 };

@@ -141,35 +141,28 @@ CompositeDataReader::CompositeDataReader(const ConfigParameters& config) :
         m_streams.push_back(stream);
     }
 
-    // Currently for prefetch we use two alternativing buffers,
-    // same is the default.
-    size_t numAlternatingBuffers = 2;
-
     // Check whether to use local timeline, by default we use it for better performance.
     bool localTimeline = config(L"localTimeline", true);
+    size_t maxErrors = config(L"maxErrors", 0);
     switch (m_packingMode)
     {
     case PackingMode::sample:
         m_packer = std::make_shared<FramePacker>(
             m_sequenceEnumerator,
             m_streams,
-            numAlternatingBuffers,
-            localTimeline);
+            localTimeline,
+            maxErrors);
         break;
     case PackingMode::sequence:
         m_packer = std::make_shared<SequencePacker>(
             m_sequenceEnumerator,
             m_streams,
-            numAlternatingBuffers,
-            localTimeline);
+            localTimeline,
+            maxErrors);
         break;
     case PackingMode::truncated:
-    {
-        m_packer = std::make_shared<TruncatedBPTTPacker>(
-            m_sequenceEnumerator,
-            m_streams);
+        m_packer = std::make_shared<TruncatedBPTTPacker>(m_sequenceEnumerator, m_streams, maxErrors);
         break;
-    }
     default:
         LogicError("Unsupported type of packer '%d'.", (int)m_packingMode);
     }

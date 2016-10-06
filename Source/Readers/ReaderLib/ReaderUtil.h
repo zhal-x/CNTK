@@ -53,14 +53,14 @@ inline bool IsBase64Char(char c)
     return isalnum(c) || c == '/' || c == '+' || c == '=';
 }
 
-inline std::vector<char> DecodeBase64(const char* begin, const char* end)
+inline bool DecodeBase64(const char* begin, const char* end, std::vector<char>& result)
 {
     assert(std::find_if(begin, end, [](char c) { return !IsBase64Char(c); }) == end);
 
     size_t length = end - begin;
     if (length % 4 != 0)
-        RuntimeError("Invalid base64 data, length '%d' is not divisible by 4.", (int)length);
-    std::vector<char> result;
+        return false;
+
     result.resize((length * 3) / 4); // Upper bound on the max number of decoded symbols.
     size_t currentDecodedIndex = 0;
     while (begin < end)
@@ -74,7 +74,7 @@ inline std::vector<char> DecodeBase64(const char* begin, const char* end)
     // In Base 64 each 3 characters are encoded with 4 bytes. Plus there could be padding (last two bytes)
     size_t resultingLength = (length * 3) / 4 - (*(end - 2) == '=' ? 2 : (*(end - 1) == '=' ? 1 : 0));
     result.resize(resultingLength);
-    return result;
+    return true;
 }
 
 }}}
