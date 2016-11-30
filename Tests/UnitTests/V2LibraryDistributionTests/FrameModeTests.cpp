@@ -35,28 +35,6 @@ namespace
     const size_t numMinibatchesToTrain = (numSamplesPerSweep * numSweepsToTrainWith) / minibatchSize;
     const size_t totalNumberOfSamples = numSamplesPerSweep * numSweepsToTrainWith;
 
-    void LoopBasedOnMinibatches(const std::wstring& name, const DeviceDescriptor& device, std::function<DistributedLearnerPtr(const std::vector<LearnerPtr>&)> factory, const FeedForwardClassifier& classifier)
-    {
-        printf("Training loop thru minibatches with %ls.\n", name.c_str());
-
-        auto minibatchSource = TextFormatMinibatchSource(g_inputFile, { { g_featureStreamName, classifier.inputDim }, { g_labelsStreamName, classifier.ouputDim } });
-        auto featureStreamInfo = minibatchSource->StreamInfo(g_featureStreamName);
-        auto labelStreamInfo = minibatchSource->StreamInfo(g_labelsStreamName);
-
-        double learningRatePerSample = 0.02;
-
-        Trainer trainer(classifier.output, classifier.trainingLoss, classifier.prediction, { factory({ SGDLearner(classifier.output->Parameters(), LearningRatePerSampleSchedule(learningRatePerSample)) }) });
-        size_t outputFrequencyInMinibatches = 20;
-        for (size_t i = 0; i < numMinibatchesToTrain; ++i)
-        {
-            auto minibatchData = minibatchSource->GetNextMinibatch(minibatchSize, device);
-            trainer.TrainMinibatch({ { classifier.features, minibatchData[featureStreamInfo].m_data }, { classifier.labels, minibatchData[labelStreamInfo].m_data } }, device);
-            if (i % 300 == 0)
-                trainer.SaveCheckpoint(L"test.tmp");
-            PrintTrainingProgress(trainer, i, outputFrequencyInMinibatches);
-        }
-    }
-
     void LoopBasedOnSamples(const std::wstring& name, const DeviceDescriptor& device, std::function<DistributedLearnerPtr(const std::vector<LearnerPtr>&)> factory, const FeedForwardClassifier& classifier)
     {
         printf("Training loop thru samples with %ls.\n", name.c_str());
@@ -69,16 +47,21 @@ namespace
 
         Trainer trainer(classifier.output, classifier.trainingLoss, classifier.prediction, { factory({ SGDLearner(classifier.output->Parameters(), LearningRatePerSampleSchedule(learningRatePerSample)) }) });
         size_t outputFrequencyInMinibatches = 20;
+        size_t currentCheckpointIndex = 0;
         size_t checkpointFrequency = 7000;
-        size_t count = 0, index = 0;
+        size_t index = 0;
         bool updated = true;
-        while (count < totalNumberOfSamples && updated)
+        while (trainer.TotalNumberOfSamplesSeen() < totalNumberOfSamples && updated)
         {
             auto minibatchData = minibatchSource->GetNextMinibatch(minibatchSize, device);
             updated = trainer.TrainMinibatch({ { classifier.features, minibatchData[featureStreamInfo].m_data }, { classifier.labels, minibatchData[labelStreamInfo].m_data } }, device);
-            count += trainer.PreviousMinibatchSampleCount();
-            if (count % checkpointFrequency == 0)
-                trainer.SaveCheckpoint(L"test.tmp");
+
+            size_t checkpointIndex = trainer.TotalNumberOfSamplesSeen() / checkpointFrequency;
+            if (checkpointIndex > currentCheckpointIndex)
+            {
+                trainer.SaveCheckpoint(L"test");
+                currentCheckpointIndex = checkpointIndex;
+            }
             PrintTrainingProgress(trainer, index++, outputFrequencyInMinibatches);
         }
     }
@@ -136,7 +119,6 @@ void TestFrameMode()
 
     // Create different types of loops.
     std::vector<std::function<void(const std::wstring&, const DeviceDescriptor&, std::function<DistributedLearnerPtr(const std::vector<LearnerPtr>&)>, const FeedForwardClassifier&)>> loops;
-    loops.push_back(LoopBasedOnMinibatches);
     loops.push_back(LoopBasedOnSamples);
 
     // Trying all distribution methods on all available devices with different types of loops.

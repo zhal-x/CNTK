@@ -3235,6 +3235,14 @@ namespace CNTK
             return m_learners;
         }
 
+        bool IsDistributed() const override
+        {
+            bool result = false;
+            for (const auto&l : m_learners)
+                result |= l->IsDistributed();
+            return result;
+        }
+
         virtual ~CompositeLearner() {}
 
     private:
@@ -3385,6 +3393,8 @@ namespace CNTK
         /// Learners associated with this Trainer for updating the model's parameters using computed gradients.
         ///
         const std::vector<LearnerPtr>& ParameterLearners() const { return m_learner->ParameterLearners(); }
+
+        size_t TotalNumberOfSamplesSeen() const { return m_totalSamplesSeen; }
 
         CNTK_API ~Trainer();
 
