@@ -22,7 +22,7 @@ void TestUpdate(LearnerPtr& learner, NDShape& shape, size_t numMinibatches, cons
 {
     auto seed = (unsigned long) rng();
     std::vector<std::pair<Parameter, NDArrayViewPtr>> gradientValues;
-    MinibatchInfo minibatch { 1, false };
+    MinibatchInfo minibatch { false, 1 };
     size_t totalSamplesSeen = 0;
     for (auto i = 0; i < numMinibatches; i++)
     {
