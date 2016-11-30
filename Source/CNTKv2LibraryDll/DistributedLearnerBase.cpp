@@ -9,23 +9,29 @@
 
 namespace CNTK
 {
-    DistributedLearnerBase::DistributedLearnerBase(DistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners)
+    DistributedLearnerBase::DistributedLearnerBase(DistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners, size_t distributeAfterSamples)
         : DistributedLearner(),
           m_communicator(communicator),
-          m_learner(std::make_shared<CompositeLearner>(learners))
+          m_learner(std::make_shared<CompositeLearner>(learners)),
+          m_distributeAfterSamples(distributeAfterSamples),
+          m_totalNumberOfSamplesSeen(0)
     {
     }
 
     // Get checkpoint state associated with distributed trainer
     Dictionary DistributedLearnerBase::CreateCheckpoint()
     {
-        return m_learner->CreateCheckpoint();
+        Dictionary result;
+        result[L"localLearners"] = m_learner->CreateCheckpoint();
+        result[L"totalNumberOfSamplesSeen"] = m_totalNumberOfSamplesSeen;
+        return result;
     }
 
     // Restores the state associated with distributed trainer
     void DistributedLearnerBase::RestoreFromCheckpoint(const Dictionary& checkpoint)
     {
-        return m_learner->RestoreFromCheckpoint(checkpoint);
+        m_learner->RestoreFromCheckpoint(checkpoint[L"localLearners"].Value<Dictionary>());
+        m_totalNumberOfSamplesSeen = checkpoint[L"totalNumberOfSamplesSeen"].Value<size_t>();
     }
 
     void DistributedLearnerBase::PrepaireZeroGradients(std::vector<std::pair<Parameter, NDArrayViewPtr>>& gradientValues, MinibatchInfo& info)

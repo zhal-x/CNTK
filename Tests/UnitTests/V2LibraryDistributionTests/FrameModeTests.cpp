@@ -103,12 +103,12 @@ void TestFrameMode()
 {
     // Create a set of trainers.
     std::map<std::wstring, std::function<DistributedLearnerPtr(const std::vector<LearnerPtr>&)>> learners;
-    learners[L"simple"] = [](const std::vector<LearnerPtr>& l) { return CreateDataParallelDistributedLearner(MPICommunicator(), l); };
+    learners[L"simple"] = [](const std::vector<LearnerPtr>& l) { return CreateDataParallelDistributedLearner(MPICommunicator(), l, 0); };
 
     if (Is1bitSGDAvailable())
     {
-        learners[L"1bitsgd"] = [](const std::vector<LearnerPtr>& l) { return CreateQuantizedDataParallelDistributedLearner(QuantizedMPICommunicator(true, true, 32), l); };
-        learners[L"blockmomentum"] = [](const std::vector<LearnerPtr>& l) { return CreateBlockMomentumDistributedLearner(MPICommunicator(), l, 1024); };
+        learners[L"1bitsgd"] = [](const std::vector<LearnerPtr>& l) { return CreateQuantizedDataParallelDistributedLearner(QuantizedMPICommunicator(true, true, 32), l, 0); };
+        learners[L"blockmomentum"] = [](const std::vector<LearnerPtr>& l) { return CreateBlockMomentumDistributedLearner(MPICommunicator(), l, 0, 1024); };
     }
 
     // Create a set of devices.

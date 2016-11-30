@@ -53,11 +53,19 @@ namespace CNTK
         }
 
     protected:
-        DistributedLearnerBase(DistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners);
+        DistributedLearnerBase(DistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners, size_t distributeAfterSamples);
 
         static void PrepaireZeroGradients(std::vector<std::pair<Parameter, NDArrayViewPtr>>& gradientValues, MinibatchInfo& info);
 
-        DistributedCommunicatorPtr m_communicator;
-        LearnerPtr m_learner;
+        const DistributedCommunicatorPtr m_communicator;
+        const CompositeLearnerPtr m_learner;
+        const size_t m_distributeAfterSamples;
+
+        size_t m_totalNumberOfSamplesSeen;
+
+        DistributedLearnerBase(const DistributedLearnerBase&) = delete;
+        DistributedLearnerBase& operator=(const DistributedLearnerBase&) = delete;
+        DistributedLearnerBase& operator=(DistributedLearnerBase&&) = delete;
+        DistributedLearnerBase(DistributedLearnerBase&& other) = delete;
     };
 }

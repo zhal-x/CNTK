@@ -3747,13 +3747,14 @@ namespace CNTK
         {}
     };
 
-    CNTK_API DistributedLearnerPtr CreateDataParallelDistributedLearner(DistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners, bool useAsyncBufferedParameterUpdate = false);
+    CNTK_API DistributedLearnerPtr CreateDataParallelDistributedLearner(DistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners, size_t distributeAfterSamples, bool useAsyncBufferedParameterUpdate = false);
 
-    CNTK_API DistributedLearnerPtr CreateQuantizedDataParallelDistributedLearner(QuantizedDistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners, bool useAsyncBufferedParameterUpdate = false);
+    CNTK_API DistributedLearnerPtr CreateQuantizedDataParallelDistributedLearner(QuantizedDistributedCommunicatorPtr communicator, const std::vector<LearnerPtr>& learners, size_t distributeAfterSamples, bool useAsyncBufferedParameterUpdate = false);
 
     CNTK_API DistributedLearnerPtr CreateBlockMomentumDistributedLearner(
         DistributedCommunicatorPtr communicator,
         const std::vector<LearnerPtr>& learners,
+        size_t distributeAfterSamples,
         size_t blockSize,
         double blockMomentumAsTimeConstant,
         bool useNestrovMomentum = true,
@@ -3763,6 +3764,7 @@ namespace CNTK
     CNTK_API DistributedLearnerPtr CreateBlockMomentumDistributedLearner(
         DistributedCommunicatorPtr communicator,
         const std::vector<LearnerPtr>& learners,
+        size_t distributeAfterSamples,
         size_t blockSize,
         bool useNestrovMomentum = true,
         bool resetSGDMomentumAfterAggregation = true,
