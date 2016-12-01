@@ -26,8 +26,8 @@ def test_cifar_resnet_distributed_error(device_id, is_1bit_sgd):
         pytest.skip('test only runs on GPU')
     set_default_device(cntk_device(device_id))
 
-    if not is_1bit_sgd:
-        pytest.skip('test only runs in 1-bit SGD')
+#    if not is_1bit_sgd:
+#        pytest.skip('test only runs in 1-bit SGD')
 
     try:
         base_path = os.path.join(os.environ['CNTK_EXTERNAL_TESTDATA_SOURCE_DIRECTORY'],
@@ -52,7 +52,7 @@ def test_cifar_resnet_distributed_error(device_id, is_1bit_sgd):
     reader_train_factory = lambda data_size: create_reader(os.path.join(base_path, 'train_map.txt'), os.path.join(base_path, 'CIFAR-10_mean.xml'), True, data_size)
     reader_test_factory = lambda data_size: create_reader(os.path.join(base_path, 'test_map.txt'), os.path.join(base_path, 'CIFAR-10_mean.xml'), False, data_size)
 
-    test_error = train_and_evaluate(reader_train_factory, reader_test_factory, 'resnet20', 5, distributed_learner)
+    test_error = train_and_evaluate(reader_train_factory, reader_test_factory, 'resnet20', 5, distributed_learner_factory)
 
     expected_test_error = 0.282
 
