@@ -39,7 +39,7 @@ namespace
     {
         printf("Training loop thru samples with %ls.\n", name.c_str());
 
-        auto minibatchSource = TextFormatMinibatchSource(g_inputFile, { { g_featureStreamName, classifier.inputDim }, { g_labelsStreamName, classifier.ouputDim } });
+        auto minibatchSource = TextFormatMinibatchSource(g_inputFile, { { g_featureStreamName, classifier.inputDim }, { g_labelsStreamName, classifier.ouputDim } }, totalNumberOfSamples);
         auto featureStreamInfo = minibatchSource->StreamInfo(g_featureStreamName);
         auto labelStreamInfo = minibatchSource->StreamInfo(g_labelsStreamName);
 
@@ -51,7 +51,7 @@ namespace
         size_t checkpointFrequency = 7000;
         size_t index = 0;
         bool updated = true;
-        while (trainer.TotalNumberOfSamplesSeen() < totalNumberOfSamples && updated)
+        while (updated)
         {
             auto minibatchData = minibatchSource->GetNextMinibatch(minibatchSize, device);
             updated = trainer.TrainMinibatch({ { classifier.features, minibatchData[featureStreamInfo].m_data }, { classifier.labels, minibatchData[labelStreamInfo].m_data } }, device);
