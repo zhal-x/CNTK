@@ -29,7 +29,7 @@ class Trainer(cntk_py.Trainer):
        parameter_learners (list): list of learners from :mod:`cntk.learner`
        distributed_trainer (:class:`~cntk.distributed.distributed_trainer`): distributed trainer
     '''
-    def __init__(self, model, loss_function, eval_function, parameter_learners, distributed_trainer=None):
+    def __init__(self, model, loss_function, eval_function, parameter_learners):
         # TODO sanitizing should be removed once Swig's typemaps are in place
         model = sanitize_function(model)
         loss_function = sanitize_function(loss_function)
@@ -37,12 +37,8 @@ class Trainer(cntk_py.Trainer):
         if not isinstance(parameter_learners, list):
             parameter_learners = [parameter_learners]
 
-        if distributed_trainer:
-            super(Trainer, self).__init__(model, loss_function, eval_function,
-                parameter_learners, distributed_trainer)
-        else:
-            super(Trainer, self).__init__(model, loss_function, eval_function,
-                parameter_learners)
+        super(Trainer, self).__init__(model, loss_function, eval_function,
+            parameter_learners)
 
     def train_minibatch(self, arguments, outputs=None, device=None):
         '''
@@ -78,7 +74,8 @@ class Trainer(cntk_py.Trainer):
         '''
         if not device:
             device = use_default_device()
-        arguments = sanitize_var_map(self.model.arguments, arguments)
+        if arguments:
+            arguments = sanitize_var_map(self.model.arguments, arguments)
 
         if outputs:
             output_map = {v: None for v in outputs}
@@ -205,8 +202,15 @@ class Trainer(cntk_py.Trainer):
         return super(Trainer, self).previous_minibatch_sample_count()
 
     @property
-    def is_running_distributed(self):
+    def previous_minibatch_sample_count(self):
         '''
-        Whether the trainer is running distributed
+        The number of samples in the last minibatch trained with
         '''
-        return super(Trainer, self).is_running_distributed()
+        return super(Trainer, self).previous_minibatch_sample_count()
+
+    @property
+    def total_number_of_samples_seen(self):
+        '''
+        The number of samples seen globally between all workers from the beginning of training.
+        '''
+        return super(Trainer, self).total_number_of_samples_seen()

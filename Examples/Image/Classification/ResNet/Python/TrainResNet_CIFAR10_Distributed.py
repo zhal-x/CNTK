@@ -30,7 +30,7 @@ num_channels = 3  # RGB
 num_classes  = 10
 
 # Define the reader for both training and evaluation action.
-def create_reader(map_file, mean_file, train, distributed_after=INFINITE_SAMPLES):
+def create_reader(map_file, mean_file, train, total_data_size, distributed_after=INFINITE_SAMPLES):
     if not os.path.exists(map_file) or not os.path.exists(mean_file):
         raise RuntimeError("File '%s' or '%s' does not exist. Please run install_cifar10.py from DataSets/CIFAR-10 to fetch them" %
                            (map_file, mean_file))
@@ -50,12 +50,13 @@ def create_reader(map_file, mean_file, train, distributed_after=INFINITE_SAMPLES
         ImageDeserializer(map_file, StreamDefs(
             features = StreamDef(field='image', transforms=transforms), # first column in map file is referred to as 'image'
             labels   = StreamDef(field='label', shape=num_classes))),   # and second as 'label'
+        epoch_size=total_data_size,
         multithreaded_deserializer = False,  # turn off omp as CIFAR-10 is not heavy for deserializer
         distributed_after = distributed_after)
 
 
 # Train and evaluate the network.
-def train_and_evaluate(reader_train, reader_test, network_name, max_epochs, distributed_trainer, scale_up=False):
+def train_and_evaluate(reader_train_factory, reader_test_factory, network_name, max_epochs, distributed_learner_factory, scale_up=False):
 
     set_computation_network_trace_level(0)
 
@@ -84,8 +85,8 @@ def train_and_evaluate(reader_train, reader_test, network_name, max_epochs, dist
     # ResNet110 samples-per-second is ~7x of single GPU, comparing to ~3x without scaling
     # up. However, bigger minimatch size on the same number of samples means less updates, 
     # thus leads to higher training error. This is a trade-off of speed and accuracy
-    minibatch_size = 128 * (len(distributed_trainer.communicator().workers()) if scale_up else 1)
-    
+    minibatch_size = 128 * (len(distributed.Communicator.create_mpi().workers()) if scale_up else 1)
+
     momentum_time_constant = -minibatch_size/np.log(0.9)
     l2_reg_weight = 0.0001
 
@@ -95,9 +96,12 @@ def train_and_evaluate(reader_train, reader_test, network_name, max_epochs, dist
     mm_schedule = momentum_as_time_constant_schedule(momentum_time_constant)
     
     # trainer object
-    learner     = momentum_sgd(z.parameters, lr_schedule, mm_schedule,
-                               l2_regularization_weight = l2_reg_weight)
-    trainer     = Trainer(z, ce, pe, learner, distributed_trainer)
+    learner     = distributed_learner_factory(momentum_sgd(z.parameters, lr_schedule, mm_schedule,
+                                                           l2_regularization_weight = l2_reg_weight))
+    trainer     = Trainer(z, ce, pe, learner)
+
+    total_number_of_samples = max_epochs * epoch_size
+    reader_train = reader_train_factory(total_number_of_samples)
 
     # define mapping from reader streams to network inputs
     input_map = {
@@ -109,18 +113,23 @@ def train_and_evaluate(reader_train, reader_test, network_name, max_epochs, dist
     progress_printer = ProgressPrinter(tag='Training')
 
     # perform model training
-    for epoch in range(max_epochs):       # loop over epochs
-        sample_count = 0
-        while sample_count < epoch_size:  # loop over minibatches in the epoch
-            data = reader_train.next_minibatch(min(minibatch_size, epoch_size-sample_count), input_map=input_map) # fetch minibatch.
-            trainer.train_minibatch(data)                                   # update model with it
-            sample_count += trainer.previous_minibatch_sample_count         # count samples processed so far
-            progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
-        progress_printer.epoch_summary(with_metric=True)
-        # save model only in worker0, otherwise there will be file write conflicts for multi GPU on the same machine
-        if distributed_trainer.communicator().current_worker().global_rank == 0:
-            persist.save_model(z, os.path.join(model_path, network_name + "_{}.dnn".format(epoch)))
-    
+    current_epoch = 0
+    updated = True
+    sample_count = 0
+    while updated:
+        data = reader_train.next_minibatch(min(minibatch_size, epoch_size-sample_count), input_map=input_map) # fetch minibatch.
+        updated = trainer.train_minibatch(data)                                                               # update model with it
+        sample_count += trainer.previous_minibatch_sample_count
+
+        progress_printer.update_with_trainer(trainer, with_metric=True)                                       # log progress
+        epoch_index = trainer.total_number_of_samples_seen/epoch_size
+        if current_epoch != epoch_index:                                                                      # new epoch reached
+            progress_printer.epoch_summary(with_metric=True)
+            current_epoch=epoch_index
+            sample_count=0
+            if learner.communicator().is_main():
+                persist.save_model(z, os.path.join(model_path, network_name + "_{}.dnn".format(epoch)))
+
     # Evaluation parameters
     epoch_size     = 10000
     minibatch_size = 16
@@ -131,6 +140,7 @@ def train_and_evaluate(reader_train, reader_test, network_name, max_epochs, dist
     sample_count    = 0
     minibatch_index = 0
 
+    test_reader = test_reader_factory(epoch_size)
     while sample_count < epoch_size:
         current_minibatch = min(minibatch_size, epoch_size - sample_count)
         # Fetch next test min batch.
@@ -165,14 +175,16 @@ if __name__=='__main__':
 
     # Create distributed trainer
     print("Start training: quantize_bit = {}, epochs = {}, distributed_after = {}".format(num_quantization_bits, epochs, distributed_after_samples))
-    distributed_trainer = distributed.data_parallel_distributed_trainer(
-        num_quantization_bits=num_quantization_bits,
-        distributed_after=distributed_after_samples)
+    distributed_learner_factory = lambda learner: distributed.data_parallel_distributed_learner(learners=[learner],
+                                                                                                num_quantization_bits=num_quantization_bits,
+                                                                                                distributed_after=distributed_after_samples)
 
-    reader_train = create_reader(os.path.join(data_path, 'train_map.txt'), os.path.join(data_path, 'CIFAR-10_mean.xml'), True, distributed_after_samples)
-    reader_test  = create_reader(os.path.join(data_path, 'test_map.txt'), os.path.join(data_path, 'CIFAR-10_mean.xml'), False)
-    
-    train_and_evaluate(reader_train, reader_test, network_name, epochs, distributed_trainer, scale_up)
-    
+    reader_train_factory = lambda data_size: \
+        create_reader(os.path.join(data_path, 'train_map.txt'), os.path.join(data_path, 'CIFAR-10_mean.xml'), True, data_size, distributed_after_samples)
+    reader_test_factory = lambda data_size: \
+        create_reader(os.path.join(data_path, 'test_map.txt'), os.path.join(data_path, 'CIFAR-10_mean.xml'), False, data_size)
+
+    train_and_evaluate(reader_train_factory, reader_test_factory, network_name, epochs, distributed_learner_factory, scale_up)
+
     # Must call MPI finalize when process exit
     distributed.Communicator.finalize()

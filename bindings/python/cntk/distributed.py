@@ -69,6 +69,9 @@ class Communicator(cntk_py.DistributedCommunicator):
         sync point to make sure all workers reach the same state
         '''
         super().barrier()
+
+    def is_main(self):
+        return super().current_worker().is_main()
         
     @staticmethod
     def finalize():
@@ -76,7 +79,11 @@ class Communicator(cntk_py.DistributedCommunicator):
         calls MPI_Finalize(), and no more communication can happen afterwards
         '''
         cntk_py.DistributedCommunicator.finalize()
-        
+
+    @staticmethod
+    def create_mpi():
+        return cntk_py.mpicommunicator()
+
 class DistributedLearner(cntk_py.DistributedLearner):
     '''
     A distributed learner that handles data like gradients/momentums across multiple MPI workers
@@ -93,7 +100,7 @@ class DistributedLearner(cntk_py.DistributedLearner):
         return super().get_communicator()
         
 @typemap
-def data_parallel_distributed_learner(parameter_learners, num_quantization_bits=32, use_async_buffered_parameter_update=False):
+def data_parallel_distributed_learner(learners, distributed_after=0, num_quantization_bits=32, use_async_buffered_parameter_update=False):
     '''
     Creates a data parallel distributed learner
 
@@ -105,42 +112,45 @@ def data_parallel_distributed_learner(parameter_learners, num_quantization_bits=
     Returns:
         a distributed learner instance
     '''
-    if not isinstance(parameter_learners, list):
-        parameter_learners = [parameter_learners]
+    if not isinstance(learners, list):
+        learners = [learners]
 
     if (num_quantization_bits < 32):
         return cntk_py.create_quantized_data_parallel_distributed_learner(
             cntk_py.quantized_mpicommunicator(True, True, num_quantization_bits),
-            parameter_learners,
+            learners,
+            distributed_after,
             use_async_buffered_parameter_update)
     else:
         return cntk_py.create_data_parallel_distributed_learner(
             cntk_py.mpicommunicator(),
-            parameter_learners,
+            learners,
+            distributed_after,
             use_async_buffered_parameter_update)
-            
+
 @typemap
-def block_momentum_distributed_learner(parameter_learners, block_size, block_momentum_as_time_constant=None, use_nestrov_momentum=True, reset_sgd_momentum_after_aggregation=True, block_learning_rate=1.0, distributed_after=0):
+def block_momentum_distributed_learner(learners, block_size, block_momentum_as_time_constant=None, use_nestrov_momentum=True, reset_sgd_momentum_after_aggregation=True, block_learning_rate=1.0, distributed_after=0):
     '''
     Creates a block momentum distributed learner
 
     Args:
+        distributed_after (int): number of samples after which distributed training starts
         block_size (int): block size
         block_momentum_as_time_constant (float): block momentum as time constant
         use_nestrov_momentum (bool): use nestrov momentum
         reset_sgd_momentum_after_aggregation (bool): reset SGD momentum after aggregation
         block_learning_rate (float): block learning rate
-        distributed_after (int): number of samples after which distributed training starts
     Returns:
         a distributed learner instance
     '''
-    if not isinstance(parameter_learners, list):
-        parameter_learners = [parameter_learners]
+    if not isinstance(learners, list):
+        learners = [learners]
 
     if block_momentum_as_time_constant == None:
         return cntk_py.create_block_momentum_distributed_learner(
             cntk_py.mpicommunicator(),
-            parameter_learners,
+            learners,
+            distributed_after,
             block_size,
             use_nestrov_momentum,
             reset_sgd_momentum_after_aggregation,
@@ -148,7 +158,8 @@ def block_momentum_distributed_learner(parameter_learners, block_size, block_mom
     else:
         return cntk_py.create_block_momentum_distributed_learner(
             cntk_py.mpicommunicator(),
-            parameter_learners,
+            learners,
+            distributed_after,
             block_size,
             block_momentum_as_time_constant,
             use_nestrov_momentum,
