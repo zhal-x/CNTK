@@ -26,8 +26,8 @@ def test_cifar_resnet_distributed_error(device_id, is_1bit_sgd):
         pytest.skip('test only runs on GPU')
     set_default_device(cntk_device(device_id))
 
-#    if not is_1bit_sgd:
-#        pytest.skip('test only runs in 1-bit SGD')
+    if not is_1bit_sgd:
+        pytest.skip('test only runs in 1-bit SGD')
 
     try:
         base_path = os.path.join(os.environ['CNTK_EXTERNAL_TESTDATA_SOURCE_DIRECTORY'],
