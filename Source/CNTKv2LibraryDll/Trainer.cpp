@@ -150,6 +150,8 @@ namespace CNTK
         gradients.reserve(modelParameters.size());
 
         bool emptyMinibatch = arguments.empty() || (arguments.begin()->second == nullptr);
+        NDArrayViewPtr trainingLoss = nullptr;
+        NDArrayViewPtr evalCriterion = nullptr;
         if (emptyMinibatch)
         {
             m_prevMinibatchNumSamples = 0;
@@ -164,19 +166,22 @@ namespace CNTK
             ExecuteForwardBackward(arguments, outputsToFetch, computeDevice, parameterGradients);
             for (const auto& parameter : modelParameters)
                 gradients.push_back(std::make_pair(parameter, parameterGradients[parameter]->Data()));
+            trainingLoss = m_prevMinibatchAggregateTrainingLossValue->Data();
+            evalCriterion = m_prevMinibatchAggregateEvalCriterionValue->Data();
         }
 
         // Update parameters.
-        MinibatchInfo info
-        {
-            arguments.empty(),
-            m_prevMinibatchNumSamples,
-            m_prevMinibatchAggregateTrainingLossValue->Data(),
-            m_prevMinibatchAggregateEvalCriterionValue->Data()
-        };
-
+        MinibatchInfo info { arguments.empty(), m_prevMinibatchNumSamples, trainingLoss, evalCriterion };
         auto updated = m_learner->Update(gradients, info, m_totalSamplesSeen);
+
+        // Update internal state.
         m_prevMinibatchNumSamples = info.numberOfSamples;
+        if (emptyMinibatch)
+        {
+            // Have to reassign loss and criterion.
+            m_prevMinibatchAggregateEvalCriterionValue = std::make_shared<Value>(info.evalCriterionValue);
+            m_prevMinibatchAggregateTrainingLossValue = std::make_shared<Value>(info.trainingLossValue);
+        }
         return updated;
     }
 

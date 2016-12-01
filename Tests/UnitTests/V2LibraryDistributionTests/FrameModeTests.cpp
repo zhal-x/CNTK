@@ -39,7 +39,12 @@ namespace
     {
         printf("Training loop thru samples with %ls.\n", name.c_str());
 
-        auto minibatchSource = TextFormatMinibatchSource(g_inputFile, { { g_featureStreamName, classifier.inputDim }, { g_labelsStreamName, classifier.ouputDim } }, totalNumberOfSamples);
+        auto minibatchSource = TextFormatMinibatchSource(g_inputFile,
+            { { g_featureStreamName, classifier.inputDim }, { g_labelsStreamName, classifier.ouputDim } },
+            totalNumberOfSamples,
+            true,
+            name == L"blockmomentum" ? MinibatchSource::InfiniteSamples: 0);
+
         auto featureStreamInfo = minibatchSource->StreamInfo(g_featureStreamName);
         auto labelStreamInfo = minibatchSource->StreamInfo(g_labelsStreamName);
 
@@ -54,7 +59,10 @@ namespace
         while (updated)
         {
             auto minibatchData = minibatchSource->GetNextMinibatch(minibatchSize, device);
-            updated = trainer.TrainMinibatch({ { classifier.features, minibatchData[featureStreamInfo].m_data }, { classifier.labels, minibatchData[labelStreamInfo].m_data } }, device);
+            if (minibatchData.empty())
+                updated = trainer.TrainMinibatch({}, device);
+            else
+                updated = trainer.TrainMinibatch({ { classifier.features, minibatchData[featureStreamInfo].m_data }, { classifier.labels, minibatchData[labelStreamInfo].m_data } }, device);
 
             size_t checkpointIndex = trainer.TotalNumberOfSamplesSeen() / checkpointFrequency;
             if (checkpointIndex > currentCheckpointIndex)
@@ -62,6 +70,7 @@ namespace
                 trainer.SaveCheckpoint(L"test");
                 currentCheckpointIndex = checkpointIndex;
             }
+
             PrintTrainingProgress(trainer, index++, outputFrequencyInMinibatches);
         }
     }
@@ -101,6 +110,7 @@ namespace
 
 void TestFrameMode()
 {
+    std::this_thread::sleep_for(std::chrono::seconds(16));
     // Create a set of trainers.
     std::map<std::wstring, std::function<DistributedLearnerPtr(const std::vector<LearnerPtr>&)>> learners;
     learners[L"simple"] = [](const std::vector<LearnerPtr>& l) { return CreateDataParallelDistributedLearner(MPICommunicator(), l, 0); };

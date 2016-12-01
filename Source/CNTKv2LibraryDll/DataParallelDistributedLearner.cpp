@@ -121,7 +121,7 @@ namespace CNTK
 
     bool DataParallelDistributedLearner::Update(std::vector<std::pair<Parameter, NDArrayViewPtr>>& gradientValues, MinibatchInfo& info, size_t& totalNumberOfSampleSeen)
     {
-        if (m_distributeAfterSamples > m_totalNumberOfSamplesSeen)
+        if (m_totalNumberOfSamplesSeen >= m_distributeAfterSamples)
         {
             if (info.IsEmpty())
                 PrepaireZeroGradients(gradientValues, info);

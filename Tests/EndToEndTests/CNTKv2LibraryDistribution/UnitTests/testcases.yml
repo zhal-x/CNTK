@@ -5,9 +5,12 @@ tags:
     - nightly-e ((build_sku == '1bitsgd') or (build_sku == 'cpu')) and ((device=='gpu') or (flavor== 'release'))
 
 testCases:
-  Test run must be completed:
+  Test run must be completed with the same results:
     patterns:
       - ^MPI Rank {{integer}}
       - CNTKv2LibraryDistribution tests
+      - Minibatch {{integer}}
+      - loss = {{float,tolerance=0.2%}}
+      - criterion = {{float,tolerance=0.2%}}
       - Passed
 

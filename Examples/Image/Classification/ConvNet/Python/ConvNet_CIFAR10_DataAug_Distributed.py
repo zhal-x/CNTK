@@ -116,7 +116,6 @@ def convnet_cifar10_dataaug(reader_train_factory, reader_test_factory, distribut
         updated = trainer.train_minibatch(data)                                   # update model with it
         progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
         epoch_index = int(trainer.total_number_of_samples_seen/epoch_size)
-        progress_printer.epoch_summary(with_metric=True)
         if current_epoch != epoch_index:
             progress_printer.epoch_summary(with_metric=True)
             current_epoch=epoch_index
