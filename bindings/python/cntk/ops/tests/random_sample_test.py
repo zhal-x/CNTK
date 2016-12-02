@@ -79,7 +79,7 @@ def test_random_sample_with_replacement(weights, num_samples,  tolerance, raises
         
 
 RANDOM_SAMPLE_TEST_CASES_WITHOUT_REPLACEMENT = [
-    ([1., 3, 50., 1., 0.], 4, (0.25, 0.25, 0.25, 0.25, 0), 0.03, False),
+    ([1., 3, 50., 1., 0.], 4, (0.25, 0.25, 0.25, 0.25, 0), 0.0, False),
     ([1., -1.],  1, None,   0.0, True),
 ]
 @pytest.mark.parametrize("weights, num_samples, expected_relative_frequency, tolerance, raises_exception", RANDOM_SAMPLE_TEST_CASES_WITHOUT_REPLACEMENT)
