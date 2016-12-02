@@ -11,7 +11,7 @@ Unit tests random sampling related operations
 import numpy as np
 import pytest
 from .ops_test_utils import AA, precision
-from  cntk import random_sample_inclusion_frequency
+from  cntk import random_sample_inclusion_frequency, random_sample, times
 
 TEST_CASES = [
     # drawing 1 sample
@@ -51,3 +51,31 @@ def test_random_sample_inclusion_frequency(weights, num_samples, allow_duplicate
         assert np.allclose(result.eval(), expected, atol=tolerance)
 
 # BUGBUG add test for random_sample(...) too.
+
+RANDOM_SAMPLE_TEST_CASES = [
+    ([1., 3., 5., 1.],  1000, 0.03, False),
+    ([1., -1.],  100, 0.0, True),
+]
+@pytest.mark.parametrize("weights, num_samples,  tolerance, raises_exception", RANDOM_SAMPLE_TEST_CASES)
+def test_random_sample_with_replacment(weights, num_samples,  tolerance, raises_exception, device_id, precision):
+
+    weights = AA(weights);
+    expected_relative_frequency = weights / np.sum(weights)
+    num_calls = 10;
+    identity = np.identity(weights.size)
+    allow_duplicates = True
+
+    if raises_exception:
+        with pytest.raises(ValueError):
+            result = random_sample(weights, num_samples, allow_duplicates)
+            result.eval()
+    else:
+        observed_frequency = np.empty_like(weights)
+        for i in range(0, num_calls):
+            result = random_sample(weights, num_samples, allow_duplicates)
+            denseResult = times(result, identity)
+            observed_frequency += np.sum(denseResult.eval(), 0)
+        observed_relative_frequency = observed_frequency / (num_calls * num_samples)
+        assert np.allclose(observed_relative_frequency, expected_relative_frequency, atol=tolerance)
+
+
