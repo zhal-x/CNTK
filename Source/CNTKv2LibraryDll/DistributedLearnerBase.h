@@ -6,6 +6,7 @@
 #pragma once
 
 #include "CNTKLibrary.h"
+#include "Learner.h"
 
 namespace CNTK
 {

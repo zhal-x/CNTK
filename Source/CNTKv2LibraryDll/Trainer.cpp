@@ -6,7 +6,7 @@
 #include "stdafx.h"
 #include "CNTKLibrary.h"
 #include "Utils.h"
-#include "Serialization.h"
+#include "Learner.h"
 
 namespace
 {
@@ -75,10 +75,6 @@ namespace CNTK
         std::unordered_set<Parameter> learnerParametersSet(learnerParameters.begin(), learnerParameters.end());
         if (modelParametersSet != learnerParametersSet)
             InvalidArgument("Trainer ctor: Union of the parameters covered by the specified parameterLearners should match the specified model's parameters");
-    }
-
-    CNTK_API Trainer::~Trainer()
-    {
     }
 
     static double GetScalarValue(const ValuePtr& value)
@@ -310,5 +306,10 @@ namespace CNTK
             InvalidArgument("Trainer::PreviousMinibatchEvaluationAverage: Cannot get evaluation criterion value when no evaluation function was specified during 'this' trainer's construction");
 
         return (GetScalarValue(m_prevMinibatchAggregateEvalCriterionValue) / m_prevMinibatchNumSamples);
+    }
+
+    const std::vector<LearnerPtr>& Trainer::ParameterLearners() const
+    {
+        return m_learner->ParameterLearners();
     }
 }

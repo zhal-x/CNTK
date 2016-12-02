@@ -3197,59 +3197,6 @@ namespace CNTK
         CNTK_API virtual size_t CurrentVersion() const { return 0; }
     };
 
-    class CompositeLearner : public Learner
-    {
-    public:
-        CNTK_API CompositeLearner(const std::vector<LearnerPtr>& learners);
-
-        const std::vector<LearnerPtr>& GetLearners() const { return m_learners; }
-
-        bool Update(std::vector<std::pair<Parameter, NDArrayViewPtr>>& gradientValues, MinibatchInfo& trainingSampleCount, size_t& totalNumberOfSampleSeen) override;
-
-        const std::vector<Parameter>& Parameters() const override;
-
-        void ResetSmoothedGradients() override;
-
-        ///
-        /// Optionally overridable method to checkpoint the learner's state.
-        ///
-        Dictionary CreateCheckpoint() override;
-
-        ///
-        /// Optionally overridable method to restore the learner's state from a previous checkpoint.
-        ///
-        void RestoreFromCheckpoint(const Dictionary&) override;
-
-        ///
-        /// Sets a new learning rate overriding the schedule parameter used to construct this learner.
-        ///
-        void ResetLearningRate(const LearningRateSchedule& learningRateSchedule) override;
-
-        ///
-        /// Returns current learning rate.
-        ///
-        double LearningRate() const override;
-
-        const std::vector<LearnerPtr>& ParameterLearners() const
-        {
-            return m_learners;
-        }
-
-        bool IsDistributed() const override
-        {
-            bool result = false;
-            for (const auto&l : m_learners)
-                result |= l->IsDistributed();
-            return result;
-        }
-
-        virtual ~CompositeLearner() {}
-
-    private:
-        std::vector<LearnerPtr> m_learners;
-        mutable std::vector<Parameter> m_parameters;
-    };
-
     ///
     /// Create an instance of the CNTK built-in SGD learner.
     ///
@@ -3392,11 +3339,9 @@ namespace CNTK
         ///
         /// Learners associated with this Trainer for updating the model's parameters using computed gradients.
         ///
-        const std::vector<LearnerPtr>& ParameterLearners() const { return m_learner->ParameterLearners(); }
+        CNTK_API const std::vector<LearnerPtr>& ParameterLearners() const;
 
         size_t TotalNumberOfSamplesSeen() const { return m_totalSamplesSeen; }
-
-        CNTK_API ~Trainer();
 
     private:
         Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, CompositeLearnerPtr learner);

@@ -291,4 +291,46 @@ namespace CNTK
         template <typename ElementType>
         void Update(const Parameter& parameter, const NDArrayViewPtr& gradientValue, const NDArrayViewPtr& smoothedGradientValue, size_t trainingSampleCount) const;
     };
+
+    // Helper class to manage a collection of learners.
+    class CompositeLearner : public Learner
+    {
+    public:
+        CNTK_API CompositeLearner(const std::vector<LearnerPtr>& learners);
+
+        const std::vector<LearnerPtr>& GetLearners() const { return m_learners; }
+
+        bool Update(std::vector<std::pair<Parameter, NDArrayViewPtr>>& gradientValues, MinibatchInfo& trainingSampleCount, size_t& totalNumberOfSampleSeen) override;
+
+        const std::vector<Parameter>& Parameters() const override;
+
+        void ResetSmoothedGradients() override;
+
+        Dictionary CreateCheckpoint() override;
+
+        void RestoreFromCheckpoint(const Dictionary&) override;
+
+        void ResetLearningRate(const LearningRateSchedule& learningRateSchedule) override;
+
+        double LearningRate() const override;
+
+        const std::vector<LearnerPtr>& ParameterLearners() const
+        {
+            return m_learners;
+        }
+
+        bool IsDistributed() const override
+        {
+            bool result = false;
+            for (const auto&l : m_learners)
+                result |= l->IsDistributed();
+            return result;
+        }
+
+        virtual ~CompositeLearner() {}
+
+    private:
+        std::vector<LearnerPtr> m_learners;
+        mutable std::vector<Parameter> m_parameters;
+    };
 }
