@@ -37,6 +37,7 @@ def test_cifar_resnet_distributed_error(device_id, is_1bit_sgd):
             *"../../../../Examples/Image/DataSets/CIFAR-10".split("/"))
 
     base_path = os.path.normpath(base_path)
+    os.chdir(os.path.join(base_path, '..'))
 
     from _cntk_py import set_computation_network_trace_level, set_fixed_random_seed, force_deterministic_algorithms
     set_computation_network_trace_level(1) 

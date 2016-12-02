@@ -122,13 +122,13 @@ def train_and_evaluate(reader_train_factory, reader_test_factory, network_name, 
         sample_count += trainer.previous_minibatch_sample_count
 
         progress_printer.update_with_trainer(trainer, with_metric=True)                                       # log progress
-        epoch_index = trainer.total_number_of_samples_seen/epoch_size
+        epoch_index = int(trainer.total_number_of_samples_seen/epoch_size)
         if current_epoch != epoch_index:                                                                      # new epoch reached
             progress_printer.epoch_summary(with_metric=True)
             current_epoch=epoch_index
             sample_count=0
             if learner.communicator().is_main():
-                persist.save_model(z, os.path.join(model_path, network_name + "_{}.dnn".format(epoch)))
+                persist.save_model(z, os.path.join(model_path, network_name + "_{}.dnn".format(epoch_index)))
 
     # Evaluation parameters
     epoch_size     = 10000
@@ -140,7 +140,7 @@ def train_and_evaluate(reader_train_factory, reader_test_factory, network_name, 
     sample_count    = 0
     minibatch_index = 0
 
-    test_reader = test_reader_factory(epoch_size)
+    reader_test = reader_test_factory(epoch_size)
     while sample_count < epoch_size:
         current_minibatch = min(minibatch_size, epoch_size - sample_count)
         # Fetch next test min batch.
