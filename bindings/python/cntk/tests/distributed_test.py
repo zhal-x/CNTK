@@ -13,27 +13,25 @@ from ..learner import *
 from .. import distributed
 from .. import cross_entropy_with_softmax, classification_error, parameter, \
         input_variable, times, plus, reduce_sum
-        
-def create_data_parallel_distributed_learner(parameter_learners, quantized):
+
+def create_data_parallel_distributed_learner(learners, quantized):
     return distributed.data_parallel_distributed_learner(
-        parameter_learners,
+        learners=learners,
         use_async_buffered_parameter_update=False,
         num_quantization_bits=(1 if quantized else 32))
 
-def create_block_momentum_distributed_learner(parameter_learners, quantized):
+def create_block_momentum_distributed_learner(learners):
     return distributed.block_momentum_distributed_learner(
-        parameter_learners,
+        learners=learners,
+        block_size=1024)
+
+def create_block_momentum_distributed_learner_with_time_constant(learners):
+    return distributed.block_momentum_distributed_learner(
+        learners=learners,
         block_size=1024,
-        distributed_after = warm_start)
+        block_momentum_as_time_constant=4096)
 
-def create_block_momentum_distributed_learner_with_time_constant(parameter_learners, quantized):
-    return distributed.block_momentum_distributed_learner(
-        parameter_learners,
-        block_size=1024,     
-        block_momentum_as_time_constant=4096,
-        distributed_after=warm_start)
-
-def run_distributed_training(tmpdir, quantized, create_func):
+def run_distributed_training(tmpdir, create_func):
 
     in1 = input_variable(shape=1)
     labels = input_variable(shape=1)
@@ -44,7 +42,7 @@ def run_distributed_training(tmpdir, quantized, create_func):
 
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
     lr_per_sample = learning_rate_schedule(0.007, UnitType.sample)
-    dist_learner = create_func([ momentum_sgd(z.parameters, lr_per_sample, momentum_time_constant) ], quantized)
+    dist_learner = create_func([ momentum_sgd(z.parameters, lr_per_sample, momentum_time_constant) ])
 
     communicator = dist_learner.communicator()
     workers = communicator.workers()
@@ -76,9 +74,15 @@ def run_distributed_training(tmpdir, quantized, create_func):
     assert trainer.model.__doc__
 
 def test_distributed(tmpdir, is_1bit_sgd):
-    run_distributed_training(tmpdir, quantized=(True if is_1bit_sgd==1 else False), create_func=create_data_parallel_distributed_learner)
+    quantized=(True if is_1bit_sgd==1 else False)
+
+    simple_aggregation=lambda learners: create_data_parallel_distributed_learner(learners, False)
+    run_distributed_training(tmpdir, create_func=simple_aggregation)
+
     if is_1bit_sgd == 1:
-        run_distributed_training(tmpdir, True, create_func=create_block_momentum_distributed_learner)
-        run_distributed_training(tmpdir, True,  create_func=create_block_momentum_distributed_learner_with_time_constant)
+        quantized_aggregation=lambda learners: create_data_parallel_distributed_learner(learners, True)
+        run_distributed_training(tmpdir, create_func=quantized_aggregation)
+
+        run_distributed_training(tmpdir, create_func=create_block_momentum_distributed_learner)
+        run_distributed_training(tmpdir, create_func=create_block_momentum_distributed_learner_with_time_constant)
     distributed.Communicator.finalize()
-    
