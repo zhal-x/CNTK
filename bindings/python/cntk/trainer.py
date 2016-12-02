@@ -27,7 +27,6 @@ class Trainer(cntk_py.Trainer):
        loss_function (:class:`~cntk.ops.functions.Function`): loss function 
        eval_function (:class:`~cntk.ops.functions.Function`): evaluation function
        parameter_learners (list): list of learners from :mod:`cntk.learner`
-       distributed_trainer (:class:`~cntk.distributed.distributed_trainer`): distributed trainer
     '''
     def __init__(self, model, loss_function, eval_function, parameter_learners):
         # TODO sanitizing should be removed once Swig's typemaps are in place
@@ -46,8 +45,8 @@ class Trainer(cntk_py.Trainer):
 
         Args:
             arguments: maps variables to their
-             input data. The interpretation depends on the input type:
-
+             input data. Empty map signifies end of local training data.
+             The interpretation depends on the input type:
                * `dict`: keys are input variable or names, and values are the input data. 
                * any other type: if node has an unique input, ``arguments`` is mapped to this input.
                 For nodes with more than one input, only `dict` is allowed.
@@ -74,6 +73,7 @@ class Trainer(cntk_py.Trainer):
         '''
         if not device:
             device = use_default_device()
+
         if arguments:
             arguments = sanitize_var_map(self.model.arguments, arguments)
 
@@ -193,13 +193,6 @@ class Trainer(cntk_py.Trainer):
         The average evaluation criterion value per sample for the last minibatch trained
         '''
         return super(Trainer, self).previous_minibatch_evaluation_average()
-
-    @property
-    def previous_minibatch_sample_count(self):
-        '''
-        The number of samples in the last minibatch trained with
-        '''
-        return super(Trainer, self).previous_minibatch_sample_count()
 
     @property
     def previous_minibatch_sample_count(self):

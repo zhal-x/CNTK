@@ -66,23 +66,29 @@ class Communicator(cntk_py.DistributedCommunicator):
 
     def barrier(self):
         '''
-        sync point to make sure all workers reach the same state
+        Sync point to make sure all workers reach the same state.
         '''
         super().barrier()
 
     def is_main(self):
+        '''
+        Indicates if the current communicator is instantiated on the main node. The node with rank 0 is considered the main.
+        '''
         return super().current_worker().is_main()
         
     @staticmethod
     def finalize():
         '''
-        calls MPI_Finalize(), and no more communication can happen afterwards
+        Should be called when all communication is finished. No more communication should happen after this call.
         '''
         cntk_py.DistributedCommunicator.finalize()
 
     @staticmethod
-    def create_mpi():
-        return cntk_py.mpicommunicator()
+    def workers():
+        '''
+        Returns current number of the workers.
+        '''
+        return cntk_py.mpicommunicator().workers()
 
 class DistributedLearner(cntk_py.DistributedLearner):
     '''
@@ -105,10 +111,10 @@ def data_parallel_distributed_learner(learners, distributed_after=0, num_quantiz
     Creates a data parallel distributed learner
 
     Args:
-        num_quantization_bits (int): number of bits for quantization (1 to 32)
+        learners: a list of local learners (i.e. sgd)
         distributed_after (int): number of samples after which distributed training starts
+        num_quantization_bits (int): number of bits for quantization (1 to 32)
         use_async_buffered_parameter_update (bool): use async buffered parameter update
-
     Returns:
         a distributed learner instance
     '''
@@ -134,12 +140,13 @@ def block_momentum_distributed_learner(learners, block_size, block_momentum_as_t
     Creates a block momentum distributed learner
 
     Args:
-        distributed_after (int): number of samples after which distributed training starts
+        learners: a list of local learners (i.e. sgd)
         block_size (int): block size
         block_momentum_as_time_constant (float): block momentum as time constant
         use_nestrov_momentum (bool): use nestrov momentum
         reset_sgd_momentum_after_aggregation (bool): reset SGD momentum after aggregation
         block_learning_rate (float): block learning rate
+        distributed_after (int): number of samples after which distributed training starts
     Returns:
         a distributed learner instance
     '''

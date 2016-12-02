@@ -77,6 +77,7 @@ def _verify_momentum_type(momentum):
                          'momentum_as_time_constant_schedule() function)'
                          % type(momentum))
 
+# a factory method to return a minibatch info
 def minibatch_info(number_of_samples, at_end_of_sweep = False, at_end_of_data = False):
    result = cntk_py.MinibatchInfo()
    result.at_end_of_data = at_end_of_data
@@ -97,10 +98,12 @@ class Learner(cntk_py.Learner):
         Update the parameters associated with this learner.
 
         Args:
-            gradient_values (dict): maps :class:`~cntk.variables.Parameter` to
+            gradient_values (list): contains tuples that map :class:`~cntk.variables.Parameter` to
              a NumPy array containing the first order gradient values for the
              Parameter w.r.t. the training objective.
-            training_sample_count (int): training sample count
+             Gradient values can be updated in case when the leaner is distributed (i.e. 1bitsgd learner)
+             The gradient values are aggregated in the list order in case of distributed learners.
+            minibatch_info(MinibatchInfo): information about the current minibatch
 
         Returns:
             `False` to indicate that learning has stopped for all of the parameters associated with this learner
