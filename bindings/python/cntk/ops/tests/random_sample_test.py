@@ -13,7 +13,7 @@ import pytest
 from .ops_test_utils import AA, precision
 from  cntk import random_sample_inclusion_frequency, random_sample, times
 
-TEST_CASES = [
+INCLUSION_FREQUENCY_TEST_CASES = [
     # drawing 1 sample
     (np.full((4), 42.),                                                               1,     True,   np.full((4), 1/4),                                    0.0001, False),
 
@@ -37,7 +37,7 @@ TEST_CASES = [
     ([1,-1.],                                                                         1,     False,  [0],                                                  0.0001, True), 
 ]
 
-@pytest.mark.parametrize("weights, num_samples, allow_duplicates, expected, tolerance, raises_exception", TEST_CASES)
+@pytest.mark.parametrize("weights, num_samples, allow_duplicates, expected, tolerance, raises_exception", INCLUSION_FREQUENCY_TEST_CASES)
 def test_random_sample_inclusion_frequency(weights, num_samples, allow_duplicates, expected, tolerance, raises_exception, device_id, precision):
 
     weights = AA(weights);
@@ -49,8 +49,6 @@ def test_random_sample_inclusion_frequency(weights, num_samples, allow_duplicate
     else:
         result = random_sample_inclusion_frequency(weights, num_samples, allow_duplicates)
         assert np.allclose(result.eval(), expected, atol=tolerance)
-
-# BUGBUG add test for random_sample(...) too.
 
 RANDOM_SAMPLE_TEST_CASES_WITH_REPLACEMENT = [
     ([1., 3., 5., 1.],  1000, 0.03, False),
