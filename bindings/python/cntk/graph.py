@@ -44,7 +44,7 @@ def depth_first_search(node, visitor):
 
     return accum
 
-def find_nodes_by_name(node, node_name):
+def find_by_name(node, node_name):
     '''
     Finds nodes in the graph starting from `node` and doing a depth-first
     search.

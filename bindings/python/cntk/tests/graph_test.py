@@ -59,15 +59,15 @@ def test_find_nodes():
     d = _graph_dict()
 
     for name in ['i1', 'i2', 'p1', 'op1', 'op2', 'past']:
-        n = find_nodes_by_name(d['root'], name)
+        n = find_by_name(d['root'], name)
         assert len(n) == 1, name
         assert n[0].name == name, name
     
-    n = find_nodes_by_name(d['root'], 'op3')
+    n = find_by_name(d['root'], 'op3')
     assert len(n) == 2, 'op3'
     assert n[0].name == 'op3' and n[1].name == 'op3', 'op3'
 
-    none = find_nodes_by_name(d['root'], 'none')
+    none = find_by_name(d['root'], 'none')
     assert none == []
 
 
