@@ -758,8 +758,8 @@ def sanitize_var_map(op_arguments, arguments, precision=None,
 
         sample_size = sample_sizes.pop()
         if len(seq_starts) != sample_size:
-            raise ValueError('you have %i samples, but seq_starts has only %i' +
-                             'elements' % (sample_sizes, len(seq_starts)))
+            raise ValueError('you have %i sample(s), but seq_starts has %i ' 
+                             'elements' % (sample_size, len(seq_starts)))
 
     if precision is not None:
         precision = sanitize_precision(precision)
