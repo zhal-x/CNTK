@@ -356,7 +356,6 @@ class Function(cntk_py.Function):
         '''
         return super(Function, self).op_name()
 
-
     @property
     @typemap
     def output(self):
@@ -435,6 +434,31 @@ class Function(cntk_py.Function):
         :raises ExceptionType: when the function has multiple placeholders.
         '''
         return super(Function, self).replace_placeholder(substitution)
+
+    @typemap
+    def find_by_name(self, name):
+        '''
+        Returns all function with ``name`` in the graph starting from this
+        node. 
+
+        Example:
+            >>> a = C.input_variable(shape=1, name='a')
+            >>> b = C.input_variable(shape=1, name='b')
+            >>> c = C.plus(a, b, name='c')
+            >>> found = c.find_by_name('b')
+            >>> [n.name for n in found]
+            ['b']
+            >>> c.find_by_name('huh')
+            []
+
+        Args:
+            name (str): names to look for
+
+        Returns:
+            list of :class:`Function`s matching ``name``
+        '''
+        from .. import graph
+        return graph.find_by_name(self, name)
 
     @typemap
     def save_model(self, filename):
