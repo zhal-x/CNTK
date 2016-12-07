@@ -30,16 +30,6 @@ namespace Microsoft { namespace MSR { namespace CNTK {
         m_currentSampleCursor(0),
         m_deserializer(deserializer)
     {
-        size_t max = 0;
-        for (const auto& c : m_randomizedChunks)
-        {
-            if (max < c.m_original->m_numberOfSequences)
-            {
-                max = c.m_original->m_numberOfSequences;
-            }
-        }
-
-        m_bufferOriginalSequences.reserve(max);
     }
 
     // Resets the current sweep according to the randomization seed provided.

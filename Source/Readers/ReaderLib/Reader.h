@@ -25,6 +25,13 @@ typedef std::shared_ptr<MBLayout> MBLayoutPtr;
 // and the below structure.
 struct ReaderConfiguration
 {
+    ReaderConfiguration() :
+        m_numberOfWorkers(0),
+        m_workerRank(0),
+        m_minibatchSizeInSamples(0),
+        m_truncationSize(0)
+    {}
+
     size_t m_numberOfWorkers;               // Number of the Open MPI workers for the current epoch
     size_t m_workerRank;                    // Rank of the Open MPI worker, worker rank has to be less than the number of workers
     size_t m_minibatchSizeInSamples;        // Maximum minibatch size for the epoch in samples
@@ -34,6 +41,11 @@ struct ReaderConfiguration
 // TODO: Should be deprecated.
 struct EpochConfiguration : public ReaderConfiguration
 {
+    EpochConfiguration() :
+        m_totalEpochSizeInSamples(0),
+        m_epochIndex(0)
+    {}
+
     size_t m_totalEpochSizeInSamples;       // Total size of the epoch in samples
     size_t m_epochIndex;                    // Current epoch index [0 .. max number of epochs)
 };

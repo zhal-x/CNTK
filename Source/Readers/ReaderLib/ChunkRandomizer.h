@@ -71,7 +71,14 @@ namespace Microsoft { namespace MSR { namespace CNTK {
     class ChunkRandomizer
     {
     public:
-        ChunkRandomizer(IDataDeserializerPtr deserializer, size_t randomizationRangeInSamples, bool legacy = false);
+        ChunkRandomizer(size_t randomizationRangeInSamples, bool legacy = false);
+
+        void SetChunks(std::vector<ChunkDescriptionPtr>&& chunks)
+        {
+            m_originalChunks = chunks;
+            if (m_originalChunks.size() < CHUNKID_MAX)
+                RuntimeError("Currently Block Randomizer does not support more than %d chunks.", (int)m_originalChunks.size());
+        }
 
         // Gets randomized chunks.
         const std::vector<RandomizedChunk>& GetRandomizedChunks() const;
@@ -80,7 +87,6 @@ namespace Microsoft { namespace MSR { namespace CNTK {
         void Randomize(unsigned int seed);
 
     private:
-        IDataDeserializerPtr m_deserializer;
         // Randomized chunks.
         std::vector<RandomizedChunk> m_randomizedChunks;
         // Original chunks.

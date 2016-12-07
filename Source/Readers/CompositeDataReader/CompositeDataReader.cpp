@@ -105,15 +105,19 @@ CompositeDataReader::CompositeDataReader(const ConfigParameters& config) :
         // By default randomizing the whole data set.
         size_t randomizationWindow = requestDataSize;
 
+        bool useLocalTimeline = m_packingMode == PackingMode::truncated || m_packingMode == PackingMode::sample;
+
         // Currently in case of images, a single chunk is a single image. So no need to randomize, chunks will be randomized anyway.
         if (ContainsDeserializer(config, L"ImageDeserializer") && m_deserializers.size() == 1)
+        {
             randomizationWindow = 1;
+        }
 
         randomizationWindow = config(L"randomizationWindow", randomizationWindow);
 
         // By default using STL random number generator.
         bool useLegacyRandomization = config(L"useLegacyRandomization", false);
-        m_sequenceEnumerator = std::make_shared<BlockRandomizer>(verbosity, randomizationWindow, deserializer, true /* should Prefetch */, BlockRandomizer::DecimationMode::chunk, useLegacyRandomization, multiThreadedDeserialization);
+        m_sequenceEnumerator = std::make_shared<BlockRandomizer>(verbosity, randomizationWindow, deserializer, true /* should Prefetch */, useLocalTimeline, useLegacyRandomization, multiThreadedDeserialization);
     }
     else
     {

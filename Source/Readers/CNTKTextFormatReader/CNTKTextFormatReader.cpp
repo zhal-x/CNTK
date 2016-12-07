@@ -41,7 +41,7 @@ CNTKTextFormatReader::CNTKTextFormatReader(const ConfigParameters& config)
         {
             // Verbosity is a general config parameter, not specific to the text format reader.
             int verbosity = config(L"verbosity", 0);
-            m_sequenceEnumerator = make_shared<BlockRandomizer>(verbosity, window, m_deserializer, true);
+            m_sequenceEnumerator = make_shared<BlockRandomizer>(verbosity, window, m_deserializer, true, false);
         }
         else
         {

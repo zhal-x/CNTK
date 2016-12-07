@@ -22,23 +22,26 @@ BlockRandomizer::BlockRandomizer(
     size_t randomizationRangeInSamples,
     IDataDeserializerPtr deserializer,
     bool shouldPrefetch,
-    DecimationMode decimationMode,
+    bool useLocalTimeline,
     bool useLegacyRandomization,
     bool multithreadedGetNextSequence)
     : m_verbosity(verbosity),
       m_deserializer(deserializer),
-      m_decimationMode(decimationMode),
       m_sweep(SIZE_MAX),
       m_epochSize(SIZE_MAX),
       m_globalSamplePosition(SIZE_MAX),
       m_epochStartPosition(0),
       m_sweepTotalNumberOfSamples(0),
-      m_chunkRandomizer(std::make_shared<ChunkRandomizer>(deserializer, randomizationRangeInSamples, useLegacyRandomization)),
       m_multithreadedGetNextSequences(multithreadedGetNextSequence),
-      m_prefetchedChunk(CHUNKID_MAX)
+      m_prefetchedChunk(CHUNKID_MAX),
+      m_useLocalTimeline(useLocalTimeline),
+      m_randomizationRangeInSamples(randomizationRangeInSamples),
+      m_legacy(useLegacyRandomization),
+      m_chunkRandomizer(make_shared<ChunkRandomizer>(m_randomizationRangeInSamples, m_legacy))
 {
     assert(deserializer != nullptr);
 
+    m_chunkRandomizer->SetChunks(m_deserializer->GetChunkDescriptions());
     m_launchType = shouldPrefetch ? launch::async : launch::deferred;
 
     m_streams = m_deserializer->GetStreamDescriptions();
@@ -61,6 +64,7 @@ size_t BlockRandomizer::GetCurrentSamplePosition()
 void BlockRandomizer::StartEpoch(const EpochConfiguration& config)
 {
     m_currentWindowRange = ClosedOpenChunkInterval{};
+    UpdateCurrentConfig(config);
 
     m_config = config;
     if (config.m_totalEpochSizeInSamples == requestDataSize)
@@ -227,27 +231,12 @@ void BlockRandomizer::Decimate(const std::vector<RandomizedSequenceDescription>&
     }
 
     decimated.reserve(all.size());
-    if (m_decimationMode == DecimationMode::chunk)
+    for (const auto& sequence : all)
     {
-        for (const auto& sequence : all)
+        if (sequence.m_chunk->m_chunkId % m_config.m_numberOfWorkers == m_config.m_workerRank)
         {
-            if (sequence.m_chunk->m_chunkId % m_config.m_numberOfWorkers == m_config.m_workerRank)
-            {
-                decimated.push_back(sequence);
-            }
+            decimated.push_back(sequence);
         }
-    }
-    // TODO: This mode should go away. Decimation based on chunks only should be sufficient.
-    // Currently this mode is used only for image reader, which uses one chunk for each image.
-    else if (m_decimationMode == DecimationMode::sequence)
-    {
-        size_t strideBegin = all.size() * m_config.m_workerRank / m_config.m_numberOfWorkers;
-        size_t strideEnd = all.size() * (m_config.m_workerRank + 1) / m_config.m_numberOfWorkers;
-        decimated.assign(all.begin() + strideBegin, all.begin() + strideEnd);
-    }
-    else
-    {
-        LogicError("Not supported mode.");
     }
 }
 
@@ -276,7 +265,7 @@ void BlockRandomizer::LoadDataChunks(const ClosedOpenChunkInterval& windowRange)
     for (size_t i = windowRange.m_begin; i < windowRange.m_end; ++i)
     {
         auto const& chunk = m_chunkRandomizer->GetRandomizedChunks()[i];
-        if (m_decimationMode == DecimationMode::chunk && chunk.m_chunkId % m_config.m_numberOfWorkers != m_config.m_workerRank)
+        if (chunk.m_chunkId % m_config.m_numberOfWorkers != m_config.m_workerRank)
         {
             continue;
         }
@@ -340,16 +329,9 @@ void BlockRandomizer::LoadDataChunks(const ClosedOpenChunkInterval& windowRange)
 }
 
 // Identifies chunk id that should be prefetched.
-// TODO: DecimationMode::sequence is not supported because it should eventually go away.
 ChunkIdType BlockRandomizer::GetChunkToPrefetch(const ClosedOpenChunkInterval& windowRange)
 {
     ChunkIdType toBePrefetched = CHUNKID_MAX;
-    if (m_decimationMode != DecimationMode::chunk)
-    {
-        // For non chunked mode, we do not do prefetch currently.
-        return toBePrefetched;
-    }
-
     auto current = windowRange.m_end;
     while (current < m_chunkRandomizer->GetRandomizedChunks().size())
     {
@@ -399,7 +381,27 @@ void BlockRandomizer::SetCurrentSamplePosition(size_t currentSamplePosition)
 
 void BlockRandomizer::SetConfiguration(const ReaderConfiguration& config)
 {
-    *((ReaderConfiguration*)&m_config) = config;
+    UpdateCurrentConfig(config);
+}
+
+void BlockRandomizer::UpdateCurrentConfig(const ReaderConfiguration& newConfig)
+{
+    if (m_useLocalTimeline &&
+        (m_config.m_numberOfWorkers != newConfig.m_numberOfWorkers || m_config.m_workerRank != newConfig.m_workerRank))
+    {
+        // Let's reinitialize the chunk randomizer and throw all chunks
+        // this worker is not interested in.
+        auto chunks = m_deserializer->GetChunkDescriptions();
+        chunks.erase(
+            std::remove_if(chunks.begin(), chunks.end(), [&](const ChunkDescriptionPtr& c) { return c->m_id % newConfig.m_numberOfWorkers != newConfig.m_workerRank; }),
+            chunks.end());
+        m_chunkRandomizer->SetChunks(std::move(chunks));
+
+        //Invalidate the sweep.
+        m_sweep = SIZE_MAX;
+    }
+
+    *((ReaderConfiguration*)&m_config) = newConfig;
 }
 
 }}}

@@ -47,7 +47,7 @@ public:
         size_t randomizationRangeInSamples,
         IDataDeserializerPtr deserializer,
         bool shouldPrefetch,
-        DecimationMode decimationMode = DecimationMode::chunk,
+        bool useLocalTimeline,
         bool useLegacyRandomization = false,
         bool multithreadedGetNextSequences = false);
 
@@ -97,6 +97,8 @@ private:
 
     // Returns next candidate for the prefetch in the given range.
     ChunkIdType GetChunkToPrefetch(const ClosedOpenChunkInterval& windowRange);
+
+    void UpdateCurrentConfig(const ReaderConfiguration& old);
 
     // Global sample position on the timeline.
     size_t m_globalSamplePosition;
@@ -161,6 +163,15 @@ private:
 
     // Current loaded chunks.
     ClosedOpenChunkInterval m_currentWindowRange;
+
+    // Flag, whether to use local timeline.
+    bool m_useLocalTimeline;
+
+    // Whether to use legacy mode for randomization.
+    bool m_legacy;
+
+    // Randomization range in samples.
+    size_t m_randomizationRangeInSamples;
 };
 
 }}}
