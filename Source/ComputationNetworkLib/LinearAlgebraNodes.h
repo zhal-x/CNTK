@@ -556,7 +556,7 @@ public:
 
     virtual void AllocateGradientMatricesForInputs(MatrixPool& matrixPool) override
     {
-        //// this is a special handling case. We need to allocate sparse matrix directly instead of from pool.
+        // this is a special handling case. We need to allocate sparse matrix directly instead of from pool.
         if (Input(0)->NeedsGradient() && Input(1)->Value().GetMatrixType() == SPARSE)
         {
             Input(0)->CreateGradientMatrixIfNull();
