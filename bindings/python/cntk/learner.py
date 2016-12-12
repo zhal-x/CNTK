@@ -90,7 +90,7 @@ class Learner(cntk_py.Learner):
         Update the parameters associated with this learner.
 
         Args:
-            gradient_values (dict): maps :class:`~cntk.variables.Parameter` to
+            gradient_values (dict): maps :class:`~cntk.ops.variables.Parameter` to
              a NumPy array containing the first order gradient values for the
              Parameter w.r.t. the training objective.
             training_sample_count (int): training sample count
@@ -369,7 +369,8 @@ def momentum_sgd(parameters, lr, momentum,
          with truncation
 
     Returns:
-        Instance of a :class:`cntk.learner.Learner` that can be passed to the :class:`cntk.trainer.Trainer`
+        Instance of a :class:`~cntk.learner.Learner` that can be passed to the
+        :class:`~cntk.trainer.Trainer`
     '''
     _verify_learning_rate_type(lr)
     _verify_momentum_type(momentum)
