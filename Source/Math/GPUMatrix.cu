@@ -4621,23 +4621,23 @@ template DEVICEID_TYPE GPUMatrix<short>::PrepareDevice(DEVICEID_TYPE deviceId) c
 template GPUMatrix<int>::GPUMatrix(const size_t, const size_t, int, int*, const size_t);
 template GPUMatrix<int>::~GPUMatrix();
 
-#define DeclareUnaryTensorOp(oper)                                                  \
+#define GPUMatrix_UnaryTensorOp(oper)                                                  \
     ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(GPUMatrix, float, oper)    \
     ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(GPUMatrix, double, oper)
 
-ForAllUnaryOps(DeclareUnaryTensorOp)
+ForAllUnaryOps(GPUMatrix_UnaryTensorOp)
 
-#define DeclareBinaryTensorOp(oper)                                                 \
+#define GPUMatrix_BinaryTensorOp(oper)                                                 \
     ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(GPUMatrix, float, oper)   \
     ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(GPUMatrix, double, oper)
 
-ForAllBinaryOps(DeclareBinaryTensorOp);
+ForAllBinaryOps(GPUMatrix_BinaryTensorOp);
 
-#define DeclareTernaryTensorOp(oper)                                                \
+#define GPUMatrix_TernaryTensorOp(oper)                                                \
     ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(GPUMatrix, float, oper)  \
     ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(GPUMatrix, double, oper)
 
-ForAllTernaryOps(DeclareTernaryTensorOp);
+ForAllTernaryOps(GPUMatrix_TernaryTensorOp);
 
 template int* TracingGPUMemoryAllocator::Allocate<int>(int, size_t);
 template size_t* TracingGPUMemoryAllocator::Allocate<size_t>(int, size_t);

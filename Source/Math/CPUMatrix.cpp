@@ -6497,23 +6497,23 @@ template void CPUMatrix<short>::Reshape(const size_t, const size_t);
 
 template CPUMatrix<int>::CPUMatrix(const size_t, const size_t, int*, const size_t);
 
-#define DeclareUnaryTensorOp(oper)                                                  \
+#define CPUMatrix_UnaryTensorOp(oper)                                                  \
     ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(CPUMatrix, float, oper)    \
     ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(CPUMatrix, double, oper)
 
-ForAllUnaryOps(DeclareUnaryTensorOp)
+ForAllUnaryOps(CPUMatrix_UnaryTensorOp)
 
-#define DeclareBinaryTensorOp(oper)                                                 \
+#define CPUMatrix_BinaryTensorOp(oper)                                                 \
     ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(CPUMatrix, float, oper)   \
     ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(CPUMatrix, double, oper)
 
-ForAllBinaryOps(DeclareBinaryTensorOp);
+ForAllBinaryOps(CPUMatrix_BinaryTensorOp);
 
-#define DeclareTernaryTensorOp(oper)                                                \
+#define CPUMatrix_TernaryTensorOp(oper)                                                \
     ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(CPUMatrix, float, oper)  \
     ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(CPUMatrix, double, oper)
 
-ForAllTernaryOps(DeclareTernaryTensorOp);
+ForAllTernaryOps(CPUMatrix_TernaryTensorOp);
 
 }}}
 
