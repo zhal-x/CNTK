@@ -52,7 +52,7 @@ public:
         size_t rank = DetermineElementwiseTensorRank();
         auto result =             ValueTensorFor(rank, fr);
         auto input  = InputRef(0).ValueTensorFor(rank, fr);
-        result.DoUnaryOpOf<opForward, opSum>(0, input, 1);
+        result.template DoUnaryOpOf<opForward, opSum>(0, input, 1);
     }
 
     virtual void /*ComputationNode::*/ BackpropTo(const size_t inputIndex, const FrameRange& fr) override
@@ -72,7 +72,7 @@ public:
         }
         else if (opTypeHolder == unaryGradient)
         {
-            sliceInputGrad.DoUnaryOpOf<opBackward, opSum>(Input(inputIndex)->ParentOverwritesGradient() ? 0.0f : 1.0f, sliceOutputGrad, 1);
+            sliceInputGrad.template DoUnaryOpOf<opBackward, opSum>(Input(inputIndex)->ParentOverwritesGradient() ? 0.0f : 1.0f, sliceOutputGrad, 1);
         }
         else 
         {
@@ -80,7 +80,7 @@ public:
             // Not possible for Cos().
             auto sliceValue = (opType == binaryWithOutputGradient) ? ValueTensorFor(rank, fr) : // using input or output value
                 InputRef(0).ValueTensorFor(rank, fr);
-            sliceInputGrad.DoBinaryOpOf<opBackward, opSum>(Input(inputIndex)->ParentOverwritesGradient() ? 0.0f : 1.0f, sliceOutputGrad, sliceValue, 1);
+            sliceInputGrad.template DoBinaryOpOf<opBackward, opSum>(Input(inputIndex)->ParentOverwritesGradient() ? 0.0f : 1.0f, sliceOutputGrad, sliceValue, 1);
         }
     }
 
@@ -614,7 +614,7 @@ public:
         auto input0 = InputRef(0).ValueTensorFor(rank, fr.AllowBroadcast());
         auto input1 = InputRef(1).ValueTensorFor(rank, fr.AllowBroadcast());
 
-        result.DoBinaryOpOf<static_cast<ElementWiseOperator> (ElementWiseOperator::opLess + index), ElementWiseOperator::opSum>(0, input0, input1, 1.0f);
+        result.template DoBinaryOpOf<static_cast<ElementWiseOperator>(ElementWiseOperator::opLess + index), ElementWiseOperator::opSum>(0, input0, input1, 1.0f);
     }
 
     virtual void /*ComputationNode::*/ BackpropTo(const size_t inputIndex, const FrameRange& fr) override

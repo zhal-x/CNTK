@@ -69,7 +69,7 @@ template <class ElemType>
     // the actual operation is a Copy with reduction, where the magic is in the reduction op
     // For "Mean", m_scale is 1/#elements, and 1 otherwise.
 
-#define REDUCTION_DOUNARYOF(x) case x: result.DoUnaryOpOf<ElementWiseOperator::opCopy, x>(0, input, m_scale); break
+#define REDUCTION_DOUNARYOF(x) case x: result.template DoUnaryOpOf<ElementWiseOperator::opCopy, x>(0, input, m_scale); break
 
     switch (m_reductionOp)
     {
