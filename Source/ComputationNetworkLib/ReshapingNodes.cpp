@@ -78,7 +78,7 @@ template <class ElemType>
         REDUCTION_DOUNARYOF(ElementWiseOperator::opMin);
         REDUCTION_DOUNARYOF(ElementWiseOperator::opMax);
     default:
-        InvalidArgument("ReduceElementsNode::ForwardProp: Unsupported reduction op: '%ls'", m_operation);
+        InvalidArgument("ReduceElementsNode::ForwardProp: Unsupported reduction op: '%ls'", m_operation.c_str());
     }
 #undef REDUCTION_DOUNARYOF
 }
