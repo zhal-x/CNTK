@@ -6496,5 +6496,24 @@ template void CPUMatrix<short>::CopySection(size_t numRows, size_t numCols, shor
 template void CPUMatrix<short>::Reshape(const size_t, const size_t);
 
 template CPUMatrix<int>::CPUMatrix(const size_t, const size_t, int*, const size_t);
+
+#define CPUMatrix_UnaryTensorOp(oper)                                                  \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(CPUMatrix, float, oper)    \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(CPUMatrix, double, oper)
+
+ForAllUnaryOps(CPUMatrix_UnaryTensorOp)
+
+#define CPUMatrix_BinaryTensorOp(oper)                                                 \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(CPUMatrix, float, oper)   \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(CPUMatrix, double, oper)
+
+ForAllBinaryOps(CPUMatrix_BinaryTensorOp);
+
+#define CPUMatrix_TernaryTensorOp(oper)                                                \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(CPUMatrix, float, oper)  \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(CPUMatrix, double, oper)
+
+ForAllTernaryOps(CPUMatrix_TernaryTensorOp);
+
 }}}
 
