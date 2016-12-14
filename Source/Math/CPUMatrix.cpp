@@ -6345,16 +6345,18 @@ static void TensorOpWithFn(ElemType beta, array<ElemType*, N> pointers, ElemType
 // perform unary operation 'op' on a giving 'this', reinterpreting the matrices as tensors as specified by the dims and strides
 // This maps 'op' to a lambda.
 template <class ElemType>
-void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, ElemType alpha, ElementWiseOperator op, ElementWiseOperator reductionOp,
+template <ElementWiseOperator op, ElementWiseOperator reductionOp>
+void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, ElemType alpha,
                                    const array<size_t, 2>& offsets,
                                    const SmallVector<size_t>& regularOpDims, const array<SmallVector<ptrdiff_t>, 2>& regularStrides,
                                    const SmallVector<size_t>& reducingOpDims, const array<SmallVector<ptrdiff_t>, 2>& reducingStrides)
 {
-    if (reductionOp != ElementWiseOperator::opSum    &&
-        reductionOp != ElementWiseOperator::opLogSum &&
-        reductionOp != ElementWiseOperator::opMin    &&
-        reductionOp != ElementWiseOperator::opMax)
-        InvalidArgument("TensorOp: Unary reduction operations other than opMax, opMin, opSum, and opLogSum are not implemented.");
+    static_assert(
+        reductionOp == ElementWiseOperator::opSum ||
+        reductionOp == ElementWiseOperator::opLogSum ||
+        reductionOp == ElementWiseOperator::opMin ||
+        reductionOp == ElementWiseOperator::opMax,
+        "TensorOp: Unary reduction operations other than opMax, opMin, opSum, and opLogSum are not implemented.");
 
 // TODO: Change the lambda to take a pointer and a number of elements, so that we can pass it 1 or 4 elements, in order for it to SSE-vectorize.
 #define CaseUnaryTensorOp(oper)                                                        \
@@ -6377,13 +6379,15 @@ void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, 
 // perform binary operation 'op' on a and b giving 'this', reinterpreting the matrices as tensors as specified by the dims and strides
 // This maps 'op' to a lambda.
 template <class ElemType>
-void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, const CPUMatrix<ElemType>& b, ElemType alpha, ElementWiseOperator op, ElementWiseOperator reductionOp,
+template <ElementWiseOperator op, ElementWiseOperator reductionOp>
+void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, const CPUMatrix<ElemType>& b, ElemType alpha,
                                    const array<size_t, 3>& offsets,
                                    const SmallVector<size_t>& regularOpDims, const array<SmallVector<ptrdiff_t>, 3>& regularStrides,
                                    const SmallVector<size_t>& reducingOpDims, const array<SmallVector<ptrdiff_t>, 3>& reducingStrides)
 {
-    if (reductionOp != ElementWiseOperator::opSum)
-        InvalidArgument("TensorOp (binary): The only permitted binary reduction operation is opSum.");
+    static_assert(
+        reductionOp == ElementWiseOperator::opSum,
+        "TensorOp (binary): The only permitted binary reduction operation is opSum.");
 
 #define CaseBinaryTensorOp(oper)                                                       \
     case ElementWiseOperator::op##oper:                                                \
@@ -6405,13 +6409,15 @@ void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, 
 // perform ternary operation 'op' on a, and c giving 'this', reinterpreting the matrices as tensors as specified by the dims and strides
 // This maps 'op' to a lambda.
 template <class ElemType>
-void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, const CPUMatrix<ElemType>& b, const CPUMatrix<ElemType>& c, ElemType alpha, ElementWiseOperator op, ElementWiseOperator reductionOp,
+template <ElementWiseOperator op, ElementWiseOperator reductionOp>
+void CPUMatrix<ElemType>::TensorOp(ElemType beta, const CPUMatrix<ElemType>& a, const CPUMatrix<ElemType>& b, const CPUMatrix<ElemType>& c, ElemType alpha,
                                    const array<size_t, 4>& offsets,
                                    const SmallVector<size_t>& regularOpDims, const array<SmallVector<ptrdiff_t>, 4>& regularStrides,
                                    const SmallVector<size_t>& reducingOpDims, const array<SmallVector<ptrdiff_t>, 4>& reducingStrides)
 {
-    if (reductionOp != ElementWiseOperator::opSum)
-        InvalidArgument("TensorOp: The only permitted ternary reduction operation is opSum.");
+    static_assert(
+        reductionOp == ElementWiseOperator::opSum,
+        "TensorOp: The only permitted ternary reduction operation is opSum.");
 
 #define CaseTernaryTensorOp(oper)                                                      \
     case ElementWiseOperator::op##oper:                                                \
@@ -6480,6 +6486,24 @@ template void CPUMatrix<short>::CopySection(size_t numRows, size_t numCols, shor
 template void CPUMatrix<short>::Reshape(const size_t, const size_t);
 
 template CPUMatrix<int>::CPUMatrix(const size_t, const size_t, int*, const size_t);
+
+#define DeclareUnaryTensorOp(oper)                                                  \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(CPUMatrix, float, oper)    \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(CPUMatrix, double, oper)
+
+ForAllUnaryOps(DeclareUnaryTensorOp)
+
+#define DeclareBinaryTensorOp(oper)                                                 \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(CPUMatrix, float, oper)   \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(CPUMatrix, double, oper)
+
+ForAllBinaryOps(DeclareBinaryTensorOp);
+
+#define DeclareTernaryTensorOp(oper)                                                \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(CPUMatrix, float, oper)  \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(CPUMatrix, double, oper)
+
+ForAllTernaryOps(DeclareTernaryTensorOp);
 
 }}}
 

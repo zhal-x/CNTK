@@ -4454,16 +4454,18 @@ static shared_ptr<GPUMatrix<ElemType>> GetOnesVector(size_t N, DEVICEID_TYPE dev
 // perform unary operation 'op' on a giving 'this', reinterpreting the matrices as tensors as specified by the dims and strides
 // This binds the N-ariness to a template parameter N, and gets the data pointers out from the matrix objects.
 template <class ElemType>
-void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, ElemType alpha, ElementWiseOperator op, ElementWiseOperator reductionOp,
+template <ElementWiseOperator op, ElementWiseOperator reductionOp>
+void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, ElemType alpha,
                                    const array<size_t, 2>& offsets,
                                    const SmallVector<size_t>& regularOpDims, const array<SmallVector<ptrdiff_t>, 2>& regularStrides,
                                    const SmallVector<size_t>& reducingOpDims, const array<SmallVector<ptrdiff_t>, 2>& reducingStrides)
 {
-    if (reductionOp != ElementWiseOperator::opSum    &&
-        reductionOp != ElementWiseOperator::opLogSum &&
-        reductionOp != ElementWiseOperator::opMin    &&
-        reductionOp != ElementWiseOperator::opMax)
-        InvalidArgument("TensorOp: Unary reduction operations other than opMax, opMin, opSum, and opLogSum are not implemented.");
+    static_assert(
+        reductionOp == ElementWiseOperator::opSum    ||
+        reductionOp == ElementWiseOperator::opLogSum ||
+        reductionOp == ElementWiseOperator::opMin    ||
+        reductionOp == ElementWiseOperator::opMax,
+        "TensorOp: Unary reduction operations other than opMax, opMin, opSum, and opLogSum are not implemented.");
 
     a.PrepareDevice();
     if (a.GetComputeDeviceId() != GetComputeDeviceId())
@@ -4516,13 +4518,15 @@ void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, 
 
 // perform binary operation 'op' on a and b giving 'this', reinterpreting the matrices as tensors as specified by the dims and strides
 template <class ElemType>
-void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, const GPUMatrix<ElemType>& b, ElemType alpha, ElementWiseOperator op, ElementWiseOperator reductionOp,
+template <ElementWiseOperator op, ElementWiseOperator reductionOp>
+void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, const GPUMatrix<ElemType>& b, ElemType alpha,
                                    const array<size_t, 3>& offsets,
                                    const SmallVector<size_t>& regularOpDims, const array<SmallVector<ptrdiff_t>, 3>& regularStrides,
                                    const SmallVector<size_t>& reducingOpDims, const array<SmallVector<ptrdiff_t>, 3>& reducingStrides)
 {
-    if (reductionOp != ElementWiseOperator::opSum)
-        InvalidArgument("TensorOp: The only permitted binary reduction operation is opSum.");
+    static_assert(
+        reductionOp == ElementWiseOperator::opSum,
+        "TensorOp: The only permitted binary reduction operation is opSum.");
 
     a.PrepareDevice();
     if (a.GetComputeDeviceId() != GetComputeDeviceId() || b.GetComputeDeviceId() != GetComputeDeviceId())
@@ -4533,7 +4537,8 @@ void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, 
 
 // perform ternary operation 'op' on a, and c giving 'this', reinterpreting the matrices as tensors as specified by the dims and strides
 template <class ElemType>
-void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, const GPUMatrix<ElemType>& b, const GPUMatrix<ElemType>& c, ElemType alpha, ElementWiseOperator op, ElementWiseOperator reductionOp,
+template <ElementWiseOperator op, ElementWiseOperator reductionOp>
+void GPUMatrix<ElemType>::TensorOp(ElemType beta, const GPUMatrix<ElemType>& a, const GPUMatrix<ElemType>& b, const GPUMatrix<ElemType>& c, ElemType alpha,
                                    const array<size_t, 4>& offsets,
                                    const SmallVector<size_t>& regularOpDims, const array<SmallVector<ptrdiff_t>, 4>& regularStrides,
                                    const SmallVector<size_t>& reducingOpDims, const array<SmallVector<ptrdiff_t>, 4>& reducingStrides)
@@ -4615,6 +4620,24 @@ template DEVICEID_TYPE GPUMatrix<short>::PrepareDevice(DEVICEID_TYPE deviceId) c
 
 template GPUMatrix<int>::GPUMatrix(const size_t, const size_t, int, int*, const size_t);
 template GPUMatrix<int>::~GPUMatrix();
+
+#define DeclareUnaryTensorOp(oper)                                                  \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(GPUMatrix, float, oper)    \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(GPUMatrix, double, oper)
+
+ForAllUnaryOps(DeclareUnaryTensorOp)
+
+#define DeclareBinaryTensorOp(oper)                                                 \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(GPUMatrix, float, oper)   \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(GPUMatrix, double, oper)
+
+ForAllBinaryOps(DeclareBinaryTensorOp);
+
+#define DeclareTernaryTensorOp(oper)                                                \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(GPUMatrix, float, oper)  \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(GPUMatrix, double, oper)
+
+ForAllTernaryOps(DeclareTernaryTensorOp);
 
 template int* TracingGPUMemoryAllocator::Allocate<int>(int, size_t);
 template size_t* TracingGPUMemoryAllocator::Allocate<size_t>(int, size_t);
