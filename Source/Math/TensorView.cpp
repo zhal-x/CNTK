@@ -247,7 +247,7 @@ void TensorView<ElemType>::DoUnaryOpOf(ElemType beta, const TensorView& a, ElemT
         CheckDifferentObject(a, *this);
 
     // now perform the operation
-    GetSOB().TensorOp<op, reductionOp>(beta, a.GetSOB(), alpha, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
+    GetSOB().template TensorOp<op, reductionOp>(beta, a.GetSOB(), alpha, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
 }
 
 template <class ElemType>
@@ -266,7 +266,7 @@ void TensorView<ElemType>::DoBinaryOpOf(ElemType beta, const TensorView& a, cons
     if (reducingOpDims.size() > 0)
         CheckDifferentObject(a, *this) && CheckDifferentObject(b, *this);
 
-    GetSOB().TensorOp<op, reductionOp>(beta, a.GetSOB(), b.GetSOB(), alpha, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
+    GetSOB().template TensorOp<op, reductionOp>(beta, a.GetSOB(), b.GetSOB(), alpha, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
 }
 
 template <class ElemType>
@@ -285,7 +285,7 @@ void TensorView<ElemType>::DoTernaryOpOf(ElemType beta, const TensorView& a, con
     if (reducingOpDims.size() > 0)
         CheckDifferentObject(a, *this) && CheckDifferentObject(b, *this) && CheckDifferentObject(c, *this);
 
-    GetSOB().TensorOp<op, reductionOp>(beta, a.GetSOB(), b.GetSOB(), c.GetSOB(), alpha, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
+    GetSOB().template TensorOp<op, reductionOp>(beta, a.GetSOB(), b.GetSOB(), c.GetSOB(), alpha, offsets, regularOpDims, regularStrides, reducingOpDims, reducingStrides);
 }
 
 // -------------------------------------------------------------------
