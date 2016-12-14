@@ -684,6 +684,28 @@ def sanitize_function(arg):
 
     return arg
 
+def sanitize_variable(arg):
+    '''
+    If ``arg`` is a Function that has only one output, that one is returned.
+    If it is a Variable it is returned as is. In any other case, an exception
+    is thrown.
+
+    Args:
+        arg: argument to sanitize
+
+    Returns: 
+        :class:`~cntk.ops.variables.Variable` instance
+    '''
+    if isinstance(arg, cntk_py.Function):
+        if len(arg.outputs)!=1:
+            raise ValueError('function has not exactly one output variable')
+        return arg.output
+    elif isinstance(arg, cntk_py.Variable):
+        return arg
+    else:
+        raise ValueError('expected Variable or Function with exactly one '
+                'output, but got %s'%arg)
+
 
 def sanitize_var_map(op_arguments, arguments, precision=None,
                      device=None):

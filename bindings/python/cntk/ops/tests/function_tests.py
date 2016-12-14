@@ -90,6 +90,23 @@ def test_exception_for_unnamed_arguments():
         # not allowed, since plus has more than 1 input
         result = root_node.eval([input1, input2])
 
+def test_function_as_variable():
+    x = input_variable((2,))
+    x0 = np.asarray([[2., 1.]])
+
+    sum_node = x + 2
+    times_node = sum_node * 3
+
+    for output_arg in [
+            sum_node.outputs, 
+            sum_node, 
+            sum_node.output, 
+            [sum_node.output]]:
+        sum_output = times_node.forward({x: x0}, output_arg)
+
+        assert len(sum_output[1]) == 1
+        assert np.allclose(list(sum_output[1].values())[0], np.asarray(x0 + 2))
+
 def test_output_in_intermediate_node():
     x = input_variable((2,))
     y = input_variable((2,))

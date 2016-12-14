@@ -1,9 +1,9 @@
 from cntk import cntk_py
 from cntk.device import DeviceDescriptor
-from cntk.utils import typemap, sanitize_var_map, value_to_seq
+from cntk.utils import typemap, sanitize_var_map, sanitize_variable, value_to_seq
 from enum import Enum, unique
 import numpy as np
-
+from collections import Iterable
 
 @unique
 class CloneMethod(Enum):
@@ -211,7 +211,7 @@ class Function(cntk_py.Function):
         Example:
             >>> v = C.input_variable(shape=(3,))
             >>> f = C.reciprocal(v)
-            >>> _, fv = f.forward({v:[[1, 2, 4]]}, [f.output])
+            >>> _, fv = f.forward({v:[[1, 2, 4]]}, [f])
             >>> list(fv.values())[0]
             array([[[ 1.  ,  0.5 ,  0.25]]], dtype=float32)
 
@@ -245,7 +245,7 @@ class Function(cntk_py.Function):
 
              Data should be either NumPy arrays or a
              :class:`~cntk.io.MinibatchData` instance.
-            outputs (iterable): outputs to fetch values for.
+            outputs (:class:`~cntk.ops.variables.Variable`, :class:`Function` or iterable thereof): outputs to fetch values for.
             keep_for_backward (set, default `None`): the subset of the
              Function's output variables for which gradients shall be calculated
              in a subsequent backward call. If `None`, the returned state will
@@ -264,7 +264,14 @@ class Function(cntk_py.Function):
 
         in_var_map = sanitize_var_map(self.arguments, arguments,
                                       None, device)
-        output_map = {v: None for v in outputs}
+
+        if not isinstance(outputs, Iterable):
+            outputs = [outputs]
+        elif not isinstance(outputs, list):
+            outputs = list(outputs)
+
+        output_map = {sanitize_variable(v): None for v in outputs}
+
         keep_for_backward = set(keep_for_backward or {})
 
         state = super(Function, self)._forward(in_var_map, output_map, device,
