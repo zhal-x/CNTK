@@ -5651,4 +5651,52 @@ template short* Matrix<short>::CopyToArray(void) const;
 
 template Matrix<int>::Matrix(const size_t, const size_t, int*, DEVICEID_TYPE, const size_t, const size_t);
 
+// macro for explicit instantiation matrix template member functions
+
+#define ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp_ReduceOper(MatrixClass, ElemType, oper, reduceOper)        \
+    template void MatrixClass<ElemType>::TensorOp<ElementWiseOperator::op##oper, ElementWiseOperator::op##reduceOper>(  \
+        ElemType beta, const MatrixClass<ElemType>& a, ElemType alpha,                                                  \
+        const std::array<size_t, 2>& offsets,                                                                           \
+        const SmallVector<size_t>& regularOpDims, const std::array<SmallVector<ptrdiff_t>, 2>& regularStrides,          \
+        const SmallVector<size_t>& reducingOpDims, const std::array<SmallVector<ptrdiff_t>, 2>& reducingStrides)
+
+#define ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(MatrixClass, ElemType, oper)                               \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp_ReduceOper(MatrixClass, ElemType, oper, Sum);                  \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp_ReduceOper(MatrixClass, ElemType, oper, LogSum);               \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp_ReduceOper(MatrixClass, ElemType, oper, Min);                  \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp_ReduceOper(MatrixClass, ElemType, oper, Max);                  \
+
+#define ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(MatrixClass, ElemType, oper)                              \
+    template void MatrixClass<ElemType>::TensorOp<ElementWiseOperator::op##oper, ElementWiseOperator::opSum>(           \
+        ElemType beta, const MatrixClass<ElemType>& a, const MatrixClass<ElemType>& b, ElemType alpha,                  \
+        const std::array<size_t, 3>& offsets,                                                                           \
+        const SmallVector<size_t>& regularOpDims, const std::array<SmallVector<ptrdiff_t>, 3>& regularStrides,          \
+        const SmallVector<size_t>& reducingOpDims, const std::array<SmallVector<ptrdiff_t>, 3>& reducingStrides);
+
+#define ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(MatrixClass, ElemType, oper)                             \
+    template void MatrixClass<ElemType>::TensorOp<ElementWiseOperator::op##oper, ElementWiseOperator::opSum>(           \
+        ElemType beta, const MatrixClass<ElemType>& a, const MatrixClass<ElemType>& b,                                  \
+        const MatrixClass<ElemType>& c, ElemType alpha,                                                                 \
+        const std::array<size_t, 4>& offsets,                                                                           \
+        const SmallVector<size_t>& regularOpDims, const std::array<SmallVector<ptrdiff_t>, 4>& regularStrides,          \
+        const SmallVector<size_t>& reducingOpDims, const std::array<SmallVector<ptrdiff_t>, 4>& reducingStrides);
+
+#define Matrix_UnaryTensorOp(oper)                                                  \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(Matrix, float, oper)    \
+    ExplicitInstantiate_MatrixClass_DeclareUnaryTensorOp(Matrix, double, oper)
+
+ForAllUnaryOps(Matrix_UnaryTensorOp)
+
+#define Matrix_BinaryTensorOp(oper)                                                 \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(Matrix, float, oper)   \
+    ExplicitInstantiate_MatrixClass_DeclareBinaryTensorOp(Matrix, double, oper)
+
+ForAllBinaryOps(Matrix_BinaryTensorOp);
+
+#define Matrix_TernaryTensorOp(oper)                                                \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(Matrix, float, oper)  \
+    ExplicitInstantiate_MatrixClass_DeclareTernaryTensorOp(Matrix, double, oper)
+
+ForAllTernaryOps(Matrix_TernaryTensorOp);
+
 }}}
