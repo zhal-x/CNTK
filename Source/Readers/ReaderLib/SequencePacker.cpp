@@ -314,10 +314,8 @@ MBLayoutPtr SequencePacker::PackSparseStream(const StreamBatch& batch, size_t st
 
 Sequences SequencePacker::GetNextSequences()
 {
-    if (!m_config.m_minibatchSizeInSamples != 0)
+    if (m_config.m_minibatchSizeInSequences == 0)
         return PackerBase::GetNextSequences();
-
-    assert(m_config.m_minibatchSizeInSequences != 0);
 
     // In frame mode we know exactly how many samples we want to fetch.
     // So we do not stop till the end of epoch is reached, or we fetch as many samples as needed.
