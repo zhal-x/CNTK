@@ -222,14 +222,14 @@ public:
 protected:
     virtual ~IDataReader() { }
 public:
-    virtual void StartMinibatchLoop(size_t mbSize, size_t epoch, const std::unordered_set<InputStreamDescription>& /*requiredStreams*/, size_t requestedEpochSamples = requestDataSize)
+    virtual void StartMinibatchLoop(size_t mbSizeInSamples, size_t /*mbSizeInSequences*/, size_t epoch, const std::unordered_set<InputStreamDescription>& /*requiredStreams*/, size_t requestedEpochSamples = requestDataSize)
     {
-        StartMinibatchLoop(mbSize, epoch, requestedEpochSamples);
+        StartMinibatchLoop(mbSizeInSamples, epoch, requestedEpochSamples);
     }
 
-    virtual void StartDistributedMinibatchLoop(size_t mbSize, size_t epoch, size_t subsetNum, size_t numSubsets, const std::unordered_set<InputStreamDescription>& /*requiredStreams*/, size_t requestedEpochSamples = requestDataSize)
+    virtual void StartDistributedMinibatchLoop(size_t mbSizeInSamples, size_t /*mbSizeInSequences*/, size_t epoch, size_t subsetNum, size_t numSubsets, const std::unordered_set<InputStreamDescription>& /*requiredStreams*/, size_t requestedEpochSamples = requestDataSize)
     {
-        StartDistributedMinibatchLoop(mbSize, epoch, subsetNum, numSubsets, requestedEpochSamples);
+        StartDistributedMinibatchLoop(mbSizeInSamples, epoch, subsetNum, numSubsets, requestedEpochSamples);
     }
 
     virtual void StartMinibatchLoop(size_t mbSize, size_t epoch, size_t requestedEpochSamples = requestDataSize) = 0;
@@ -434,8 +434,8 @@ public:
     virtual bool IsLegacyReader() const override;
     virtual void StartDistributedMinibatchLoop(size_t mbSize, size_t epoch, size_t subsetNum, size_t numSubsets, size_t requestedEpochSamples = requestDataSize) override;
 
-    virtual void StartMinibatchLoop(size_t mbSize, size_t epoch, const std::unordered_set<InputStreamDescription>&, size_t requestedEpochSamples = requestDataSize) override;
-    virtual void StartDistributedMinibatchLoop(size_t mbSize, size_t epoch, size_t subsetNum, size_t numSubsets, const std::unordered_set<InputStreamDescription>&, size_t requestedEpochSamples = requestDataSize) override;
+    virtual void StartMinibatchLoop(size_t mbSizeInSamples, size_t mbSizeInSequences, size_t epoch, const std::unordered_set<InputStreamDescription>&, size_t requestedEpochSamples = requestDataSize) override;
+    virtual void StartDistributedMinibatchLoop(size_t mbSizeInSamples, size_t mbSizeInSequences, size_t epoch, size_t subsetNum, size_t numSubsets, const std::unordered_set<InputStreamDescription>&, size_t requestedEpochSamples = requestDataSize) override;
 
     // GetMinibatch - Get the next minibatch (features and labels)
     // matrices - [in] a map with named matrix types (i.e. 'features', 'labels') mapped to the corresponding matrix,

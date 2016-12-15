@@ -169,6 +169,7 @@ protected:
     // bool m_needToNormalizeMomentumByParallUtterance;
 
     intargvector m_mbSize;
+    intargvector m_mbSizeInSequences;
     bool m_truncated; // do BPTT
     // BUGBUG: The 'Truncated' option is duplicated in the reader and must be set to the same there (e.g. by defining in the config on an outer enclosing level, like current samples).
     //         We really should only read it in SGD and pass it ourselves on to the Reader, instead of it being a Reader parameter.

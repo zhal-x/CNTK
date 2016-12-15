@@ -31,6 +31,7 @@ struct ReaderConfiguration
     size_t m_numberOfWorkers;               // Number of the Open MPI workers for the current epoch
     size_t m_workerRank;                    // Rank of the Open MPI worker, worker rank has to be less than the number of workers
     size_t m_minibatchSizeInSamples;        // Maximum minibatch size for the epoch in samples
+    size_t m_minibatchSizeInSequences;      // Maximum minibatch size for the in sequences. Currently, mutually exclusive with m_minibatchSizeInSamples.
     size_t m_truncationSize;                // Truncation size in samples for truncated BPTT mode.
 };
 

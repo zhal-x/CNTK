@@ -312,4 +312,40 @@ MBLayoutPtr SequencePacker::PackSparseStream(const StreamBatch& batch, size_t st
     return pMBLayout;
 }
 
+Sequences SequencePacker::GetNextSequences()
+{
+    if (!m_config.m_minibatchSizeInSamples != 0)
+        return PackerBase::GetNextSequences();
+
+    assert(m_config.m_minibatchSizeInSequences != 0);
+
+    // In frame mode we know exactly how many samples we want to fetch.
+    // So we do not stop till the end of epoch is reached, or we fetch as many samples as needed.
+    bool shouldAddOneSample = m_config.m_minibatchSizeInSequences % m_config.m_numberOfWorkers > m_config.m_workerRank;
+    int localMinibatchSize = (int)m_config.m_minibatchSizeInSequences / (int)m_config.m_numberOfWorkers + (shouldAddOneSample ? 1 : 0);
+
+    Sequences result;
+    result.m_data.resize(m_inputStreamDescriptions.size());
+    for (size_t i = 0; i < result.m_data.size(); ++i)
+        result.m_data.reserve(localMinibatchSize);
+
+    while (localMinibatchSize > 0 && !result.m_endOfEpoch)
+    {
+        // Can be more efficient if we move the logic into randomizer.
+        auto s = m_sequenceEnumerator->GetNextSequences(1);
+        result.m_endOfEpoch = s.m_endOfEpoch;
+
+        if (s.m_data.empty()) // Iterate till we find some data for us.
+            continue;
+
+        assert((int)s.m_data.begin()->size() == 1);
+        localMinibatchSize -= 1;
+        for (size_t i = 0; i < s.m_data.size(); ++i)
+            result.m_data[i].push_back(*s.m_data[i].begin());
+    }
+    return result;
+}
+
+
+
 }}}

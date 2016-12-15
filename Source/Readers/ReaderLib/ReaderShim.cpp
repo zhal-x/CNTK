@@ -71,9 +71,9 @@ void ReaderShim<ElemType>::Init(const ConfigParameters& config)
 }
 
 template <class ElemType>
-void ReaderShim<ElemType>::StartMinibatchLoop(size_t mbSize, size_t epoch, const std::unordered_set<InputStreamDescription>& inputs, size_t requestedEpochSamples)
+void ReaderShim<ElemType>::StartMinibatchLoop(size_t mbSize, size_t epoch, const std::unordered_set<InputStreamDescription>& inputs, size_t requestedEpochSamples, size_t mbSizeInSequences)
 {
-    return StartDistributedMinibatchLoop(mbSize, epoch, 0, 1, inputs, requestedEpochSamples);
+    return StartDistributedMinibatchLoop(mbSize, epoch, 0, 1, inputs, requestedEpochSamples, mbSizeInSequences);
 }
 
 template <class ElemType>
@@ -83,7 +83,8 @@ void ReaderShim<ElemType>::StartDistributedMinibatchLoop(
     size_t subsetNum,
     size_t numSubsets,
     const std::unordered_set<InputStreamDescription>& inputs,
-    size_t requestedEpochSamples /*= requestDataSize*/)
+    size_t requestedEpochSamples /*= requestDataSize*/,
+    size_t mbSizeInSequences /*= 0*/)
 {
     EpochConfiguration config;
     config.m_workerRank = subsetNum;
@@ -91,6 +92,7 @@ void ReaderShim<ElemType>::StartDistributedMinibatchLoop(
     config.m_minibatchSizeInSamples = requestedMBSize;
     config.m_totalEpochSizeInSamples = requestedEpochSamples;
     config.m_epochIndex = epoch;
+    config.m_minibatchSizeInSequences = mbSizeInSequences;
 
     StartEpoch(config, inputs);
 }

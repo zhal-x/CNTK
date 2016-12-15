@@ -163,10 +163,10 @@ void DataReader::StartMinibatchLoop(size_t mbSize, size_t epoch, size_t requeste
 }
 
 // Same as above but with additional information about required streams.
-void DataReader::StartMinibatchLoop(size_t mbSize, size_t epoch, const std::unordered_set<InputStreamDescription>& streamDescriptions, size_t requestedEpochSamples)
+void DataReader::StartMinibatchLoop(size_t mbSizeInSamples, size_t mbSizeInSequences, size_t epoch, const std::unordered_set<InputStreamDescription>& streamDescriptions, size_t requestedEpochSamples)
 {
     for (size_t i = 0; i < m_ioNames.size(); i++)
-        m_dataReaders[m_ioNames[i]]->StartMinibatchLoop(mbSize, epoch, streamDescriptions, requestedEpochSamples);
+        m_dataReaders[m_ioNames[i]]->StartMinibatchLoop(mbSizeInSamples, mbSizeInSequences, epoch, streamDescriptions, requestedEpochSamples);
 }
 
 //SupportsDistributedMBRead - Tells if the reader supports distributed minibatch reading for parallel training
@@ -216,11 +216,11 @@ void DataReader::StartDistributedMinibatchLoop(size_t mbSize, size_t epoch, size
 }
 
 // Same as above but with additional information about required streams.
-void DataReader::StartDistributedMinibatchLoop(size_t mbSize, size_t epoch, size_t subsetNum, size_t numSubsets, const std::unordered_set<InputStreamDescription>& streamDescriptions, size_t requestedEpochSamples /* = requestDataSize*/)
+void DataReader::StartDistributedMinibatchLoop(size_t mbSizeInSamples, size_t mbSizeInSequences, size_t epoch, size_t subsetNum, size_t numSubsets, const std::unordered_set<InputStreamDescription>& streamDescriptions, size_t requestedEpochSamples /* = requestDataSize*/)
 {
     for (size_t i = 0; i < m_ioNames.size(); i++)
     {
-        m_dataReaders[m_ioNames[i]]->StartDistributedMinibatchLoop(mbSize, epoch, subsetNum, numSubsets, streamDescriptions, requestedEpochSamples);
+        m_dataReaders[m_ioNames[i]]->StartDistributedMinibatchLoop(mbSizeInSamples, mbSizeInSequences, epoch, subsetNum, numSubsets, streamDescriptions, requestedEpochSamples);
     }
 }
 

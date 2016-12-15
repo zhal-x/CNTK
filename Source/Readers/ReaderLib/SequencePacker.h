@@ -17,8 +17,9 @@ public:
     SequencePacker(
         SequenceEnumeratorPtr sequenceEnumerator,
         const std::vector<StreamDescriptionPtr>& streams,
+        bool useLocalTimeline = false,
         size_t numberOfBuffers = 2) :
-        PackerBase(sequenceEnumerator, streams, numberOfBuffers)
+        PackerBase(sequenceEnumerator, streams, numberOfBuffers), m_useLocalTimeline(useLocalTimeline)
     {}
 
     virtual Minibatch ReadMinibatch() override;
@@ -34,6 +35,10 @@ protected:
 
     // Helper function to check the sample shape of input samples.
     void CheckSampleShape(const std::vector<SequenceDataPtr>& minibatch, StreamDescriptionPtr outputStream);
+
+    Sequences GetNextSequences();
+
+    bool m_useLocalTimeline;
 };
 
 typedef std::shared_ptr<SequencePacker> SequencePackerPtr;
