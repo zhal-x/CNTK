@@ -961,7 +961,7 @@
     }
 
     public static Value CreateSequence<T>(NDShape shape, System.Collections.Generic.List<T> sequence,
-                                          System.Collections.Generic.List<bool> seqStartFalg,
+                                          bool seqStartFalg,
                                           DeviceDescriptor computeDevice)
     {
         throw new System.ArgumentException("Not implemented yet.");
@@ -969,11 +969,12 @@
 
     public static Value CreateBatchOfSequences<T>(NDShape shape,
                                                   System.Collections.Generic.List<System.Collections.Generic.List<T>> batchOfSequences,
-                                                  System.Collections.Generic.List<System.Collections.Generic.List<bool>> seqStartFalg,
+                                                  System.Collections.Generic.List<bool> seqStartFalg,
                                                   DeviceDescriptor computeDevice)
     {
         var dim = shape.TotalSize;
 
+        // Todo: deal with seqStartFlag
         if (typeof(T).Equals(typeof(float)))
         {
             var inputSeqVector = new FloatVectorVector();
@@ -1016,7 +1017,7 @@
 
     public static Value CreateSequence<T>(uint vacabSize,
                                           System.Collections.Generic.List<uint> sequence,
-                                          System.Collections.Generic.List<bool> seqStartFalg,
+                                          bool seqStartFalg,
                                           DeviceDescriptor computeDevice)
     {
         throw new System.ArgumentException("Not implemented yet.");
@@ -1024,7 +1025,7 @@
 
     public static Value CreateBatchOfSequences<T>(uint vacabSize, 
                                                   System.Collections.Generic.List<System.Collections.Generic.List<uint>> batchOfSequences,
-                                                  System.Collections.Generic.List<System.Collections.Generic.List<bool>> seqStartFalg,
+                                                  System.Collections.Generic.List<bool> seqStartFalg,
                                                   DeviceDescriptor computeDevice)
     {
         throw new System.NotImplementedException("Not implemented");
@@ -1044,7 +1045,7 @@
                                           System.Collections.Generic.List<T> data,
                                           System.Collections.Generic.List<uint> indexes,
                                           System.Collections.Generic.List<uint> nnzCounts,
-                                          System.Collections.Generic.List<bool> SequenceStartFlag,
+                                          bool SequenceStartFlag,
                                           DeviceDescriptor computeDevice)
     {
         throw new System.ArgumentException("Not implemented yet.");
@@ -1057,7 +1058,7 @@
                                                  System.Collections.Generic.List<System.Collections.Generic.List<T>> data,
                                                  System.Collections.Generic.List<System.Collections.Generic.List<uint>> indexes,
                                                  System.Collections.Generic.List<System.Collections.Generic.List<uint>> nnzCounts,
-                                                 System.Collections.Generic.List<System.Collections.Generic.List<bool>> SequenceStartFlag,
+                                                 System.Collections.Generic.List<bool> SequenceStartFlag,
                                                  DeviceDescriptor computeDevice)
     {
         throw new System.NotImplementedException("Not implemented");

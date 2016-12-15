@@ -97,12 +97,12 @@ namespace CSEvalV2Example
             outputMap[outputVar] = null;
             evalFunc.Evaluate(inputMap, outputMap, DeviceDescriptor.CPUDevice);
 
-            // Evaluate with sequence 
+            // Evaluate with sequence of images
             Console.WriteLine("Evaluate sequence of images");
 
             fileList = new List<string>() { "00000.png", "00001.png", "00002.png" };
             seqData = new List<float>();
-            var seqStartFlag = new List<bool>();
+            bool seqStartFlag = true;
             for (int sampleIndex = 0; sampleIndex < fileList.Count; sampleIndex++)
             {
                 bmp = new Bitmap(Bitmap.FromFile(fileList[sampleIndex++]));
@@ -110,7 +110,6 @@ namespace CSEvalV2Example
                 resizedCHW = resized.ParallelExtractCHW();
                 // Aadd this sample to the data buffer of this sequence
                 seqData.AddRange(resizedCHW);
-                seqStartFlag.Add(sampleIndex == 0 ? true : false);
             }
 
             inputMap[inputVar] = Value.CreateSequence(inputVar.Shape, seqData, seqStartFlag, DeviceDescriptor.CPUDevice);
@@ -136,7 +135,7 @@ namespace CSEvalV2Example
             // The outer List is the sequences. Its size is the number of qequences.
             // The inner List is the samples of one single sequence. Its size is inputShape.TotalSize * numberOfSampelsInSequence
             var inputBatch = new List<List<float>>();
-            var seqStartFlagBatch = new List<List<bool>>();
+            var seqStartFlagBatch = new List<bool>();
 
             fileList = new List<string>() { "00000.png", "00001.png", "00002.png", "00003.png", "00004.png", "00005.png" };
             int fileIndex = 0;
@@ -144,7 +143,6 @@ namespace CSEvalV2Example
             {
                 // Create a new data buffer for the new sequence
                 seqData = new List<float>();
-                seqStartFlag = new List<bool>();
                 for (int sampleIndex = 0; sampleIndex < numOfSamplesInSequence[seqIndex]; sampleIndex++)
                 {
                     bmp = new Bitmap(Bitmap.FromFile(fileList[fileIndex++]));
@@ -152,11 +150,10 @@ namespace CSEvalV2Example
                     resizedCHW = resized.ParallelExtractCHW();
                     // Aadd this sample to the data buffer of this sequence
                     seqData.AddRange(resizedCHW);
-                    seqStartFlag.Add(sampleIndex == 0 ? true : false);
                 }
                 // Add this sequence to the sequences list
                 inputBatch.Add(seqData);
-                seqStartFlagBatch.Add(seqStartFlag);
+                seqStartFlagBatch.Add(true);
             }
 
             // Create the Value from input data and add to the input map.
@@ -224,7 +221,7 @@ namespace CSEvalV2Example
             var inputSentence = "BOS i would like to find a flight from charlotte to las vegas that makes a stop in st. louis EOS";
             // the input for one sequence 
             var seqData = new List<uint>();
-            var seqStartFlag = new List<bool>();
+            var seqStartFlag = true;
             // Get the word from the sentence.
             string[] substring = inputSentence.Split(' ');
             foreach (var str in substring)
@@ -233,9 +230,7 @@ namespace CSEvalV2Example
                 var index = vocabToIndex[str];
                 // Add the sample to the sequence
                 seqData.Add(index);
-                seqStartFlag.Add(false);
             }
-            seqStartFlag[0] = true;
 
             // Create input map
             var inputValue = Value.CreateSequence<float>(vocabSize, seqData, seqStartFlag, DeviceDescriptor.CPUDevice);
@@ -267,7 +262,7 @@ namespace CSEvalV2Example
             // Each sample is represented by a onehot vector, so the index of the non-zero value of each sample is saved in the inner list
             // The outer list represents sequences of the batch.
             var inputBatch = new List<List<uint>>();
-            var seqStartFlagBatch = new List<List<bool>>();
+            var seqStartFlagBatch = new List<bool>();
             var inputSentences = new List<string>() { 
                 "BOS i would like to find a flight from charlotte to las vegas that makes a stop in st. louis EOS",
                 "BOS I want to book a flight from NewYork to Seattle EOS"
@@ -280,7 +275,6 @@ namespace CSEvalV2Example
             {
                 // the input for one sequence 
                 seqData = new List<uint>();
-                seqStartFlag = new List<bool>();
                 // Get the word from the sentence.
                 substring = inputSentences[seqIndex].Split(' ');
                 foreach (var str in substring)
@@ -289,12 +283,10 @@ namespace CSEvalV2Example
                     var index = vocabToIndex[str];
                     // Add the sample to the sequence
                     seqData.Add(index);
-                    seqStartFlag.Add(false);
                 }
                 // Add the sequence to the batch
                 inputBatch.Add(seqData);
-                seqStartFlag[0] = true;
-                seqStartFlagBatch.Add(seqStartFlag);
+                seqStartFlagBatch.Add(true);
             }
 
             // Create the Value representing the data.
@@ -367,7 +359,7 @@ namespace CSEvalV2Example
             var dataOfSequences = new List<List<float>>();
             var indexOfSequences = new List<List<uint>>();
             var nnzCountOfSequences = new List<List<uint>>();
-            var seqStartFlagBatch = new List<List<bool>>();
+            var seqStartFlagBatch = new List<bool>();
             // Assuming the images to be evlauated are quite sparse so using sparse input is a better option than dense input.
             var fileList = new List<string>() { "00000.png", "00001.png", "00002.png", "00003.png", "00004.png", "00005.png" };
             int fileIndex = 0;
@@ -377,7 +369,6 @@ namespace CSEvalV2Example
                 var dataList = new List<float>();
                 var indexList = new List<uint>();
                 var nnzCountList = new List<uint>();
-                var seqStartFlag = new List<bool>();
                 for (int sampleIndex = 0; sampleIndex < numOfSamplesInSequence[seqIndex]; sampleIndex++)
                 {
                     Bitmap bmp = new Bitmap(Bitmap.FromFile(fileList[fileIndex++]));
@@ -401,13 +392,12 @@ namespace CSEvalV2Example
                     }
                     // Add nnzCount of this sample to nnzCountList
                     nnzCountList.Add(nnzCount);
-                    seqStartFlag.Add(sampleIndex == 0 ? true : false);
                 }
                 // Add this sequence to the list
                 dataOfSequences.Add(dataList);
                 indexOfSequences.Add(indexList);
                 nnzCountOfSequences.Add(nnzCountList);
-                seqStartFlagBatch.Add(seqStartFlag);
+                seqStartFlagBatch.Add(true);
             }
 
             // Create value object from data.
