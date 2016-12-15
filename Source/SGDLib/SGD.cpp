@@ -896,12 +896,12 @@ size_t SGD<ElemType>::TrainOneEpoch(ComputationNetworkPtr net,
                                    trainSetDataReader->SupportsDistributedMBRead();
     if (useDistributedMBReading)
     {
-        trainSetDataReader->StartDistributedMinibatchLoop(tunedMBSize, epochNumber, m_mpi->CurrentNodeRank(),
+        trainSetDataReader->StartDistributedMinibatchLoop(tunedMBSize, m_mbSizeInSequences[epochNumber], epochNumber, m_mpi->CurrentNodeRank(),
             m_mpi->NumNodesInUse(), inputMatrices->GetStreamDescriptions(), epochSize);
     }
     else
     {
-        trainSetDataReader->StartMinibatchLoop(tunedMBSize, epochNumber, inputMatrices->GetStreamDescriptions(), epochSize);
+        trainSetDataReader->StartMinibatchLoop(tunedMBSize, m_mbSizeInSequences[epochNumber], epochNumber, inputMatrices->GetStreamDescriptions(), epochSize);
     }
 
     net->StartEvaluateMinibatchLoop(evaluationNodes);
@@ -1591,9 +1591,9 @@ bool SGD<ElemType>::PreCompute(ComputationNetworkPtr net,
     // To support large dataset, we usually partition whole dataset into several epoch's,
     // so we need to use all the data to do precomputing
     if (m_useAllDataForPreComputedNode) // using all the data
-        trainSetDataReader->StartMinibatchLoop(m_mbSize[0], 0, inputMatrices->GetStreamDescriptions());
+        trainSetDataReader->StartMinibatchLoop(m_mbSize[0], m_mbSizeInSequences[0], 0, inputMatrices->GetStreamDescriptions());
     else // using only one epoch. Note: One epoch is often enough for feature mean/stddev, but not for estimating priors.
-        trainSetDataReader->StartMinibatchLoop(m_mbSize[0], 0, inputMatrices->GetStreamDescriptions(), m_epochSize);
+        trainSetDataReader->StartMinibatchLoop(m_mbSize[0], m_mbSizeInSequences[0], 0, inputMatrices->GetStreamDescriptions(), m_epochSize);
     net->StartEvaluateMinibatchLoop(nodes);
 
     // initialize
@@ -2693,6 +2693,7 @@ SGDParams::SGDParams(const ConfigRecordType& configSGD, size_t sizeofElemType)
     //       mbSize = total number of samples after which a model update should happen
     //       truncated = truncation length
     m_mbSize = configSGD(L"minibatchSize", ConfigRecordType::Array(intargvector(vector<int>{256})));
+    m_mbSize = configSGD(L"minibatchSizeInSequences", ConfigRecordType::Array(intargvector(vector<int>{0})));
     m_truncated = configSGD(L"truncated", false);
     m_maxSamplesInRAM = configSGD(L"maxSamplesInRAM", (size_t) SIZE_MAX);
     m_numSubminiBatches = configSGD(L"numSubminibatches", (size_t) 1);
