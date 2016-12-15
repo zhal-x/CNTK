@@ -216,7 +216,7 @@ public:
         }
 
         // evaluate with minibatches
-        dataReader.StartMinibatchLoop(mbSize, 0, inputMatrices.GetStreamDescriptions(), numOutputSamples);
+        dataReader.StartMinibatchLoop(mbSize, 0, 0, inputMatrices.GetStreamDescriptions(), numOutputSamples);
 
         m_net->StartEvaluateMinibatchLoop(outputNodes);
 
