@@ -2693,7 +2693,7 @@ SGDParams::SGDParams(const ConfigRecordType& configSGD, size_t sizeofElemType)
     //       mbSize = total number of samples after which a model update should happen
     //       truncated = truncation length
     m_mbSize = configSGD(L"minibatchSize", ConfigRecordType::Array(intargvector(vector<int>{256})));
-    m_mbSize = configSGD(L"minibatchSizeInSequences", ConfigRecordType::Array(intargvector(vector<int>{0})));
+    m_mbSizeInSequences = configSGD(L"minibatchSizeInSequences", ConfigRecordType::Array(intargvector(vector<int>{0})));
     m_truncated = configSGD(L"truncated", false);
     m_maxSamplesInRAM = configSGD(L"maxSamplesInRAM", (size_t) SIZE_MAX);
     m_numSubminiBatches = configSGD(L"numSubminibatches", (size_t) 1);
