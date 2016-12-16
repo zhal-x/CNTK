@@ -19,6 +19,7 @@ speechTrain = [
     SGD = [
         epochSize = 20480
         minibatchSize = 20
+        minibatchSizeInSequences = 1
         learningRatesPerMB = 0.5
         numMBsToShowResult = 10
         momentumPerMB = 0:0.9
