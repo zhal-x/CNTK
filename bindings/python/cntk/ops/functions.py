@@ -1,6 +1,8 @@
 from cntk import cntk_py
 from cntk.device import DeviceDescriptor
-from cntk.utils import typemap, sanitize_var_map, value_to_seq
+from cntk.utils import typemap, sanitize_var_map, sanitize_batch, \
+        sanitize_dtype_cntk, value_to_seq
+from cntk.utils.swig_helper import map_if_possible
 from enum import Enum, unique
 import numpy as np
 
@@ -29,16 +31,7 @@ class CloneMethod(Enum):
     (e.g. for use as a fixed feature extractor)
     '''
 
-
-class Function(cntk_py.Function):
-    '''
-    Base class of all primitive tensor operators.
-
-    If it has only one output, one can invoke Variable methods on it, which it
-    will relay to its only output.
-    '''
-
-
+class FunctionMixIn(object):
     # define input shapes, in-place
     # e.g.
     # model.declare_args(42)
@@ -96,11 +89,22 @@ class Function(cntk_py.Function):
         try:
             return self.__dict__[name]
         except KeyError:
-            if len(self.outputs) == 1:
-                return getattr(self.output, name)
+            # If name is a member of self's single output, then we relay to
+            # that.
+            if name in ['outputs', 'output', 'this']:
+                # 'outputs' and 'output' are required to fetch the attribute for 
+                # in the Variable.
+                # 'this' is required for Swig and needs to be thrown if the
+                # object is created the first time.
+                # All others we try to find in self.output.
+                raise
 
-        raise AttributeError("'%s' object has no attribute '%s'" %
-                             (type(self), name))
+            if len(self.outputs) == 1 and hasattr(self.output, name):
+                return getattr(self.output, name)
+            else:
+                raise AttributeError("'%s' object has no attribute '%s'" %
+                        (type(self), name))
+
 
     @property
     @typemap
@@ -108,7 +112,7 @@ class Function(cntk_py.Function):
         '''
         List of all input variables of the Function that are not of type Parameter or Constant
         '''
-        return super(Function, self).arguments()
+        return super(FunctionMixIn, self).arguments()
 
     @property
     @typemap
@@ -116,7 +120,7 @@ class Function(cntk_py.Function):
         '''
         List of the attributes of the function
         '''
-        return super(Function, self).attributes()
+        return super(FunctionMixIn, self).attributes()
 
     @typemap
     def clone(self, method, substitutions=None):
@@ -142,7 +146,7 @@ class Function(cntk_py.Function):
                 'ParameterCloningMethod_' + CloneMethod(method).name.capitalize())
         if substitutions is None:
             substitutions = {}
-        return super(Function, self).clone(method, substitutions)
+        return super(FunctionMixIn, self).clone(method, substitutions)
 
     @property
     @typemap
@@ -150,7 +154,7 @@ class Function(cntk_py.Function):
         '''
         List of all `Constant` variables of this :class:`~cntk.ops.functions.Function`
         '''
-        return super(Function, self).constants()
+        return super(FunctionMixIn, self).constants()
 
     def eval(self, arguments=None, device=None):
         '''
@@ -273,7 +277,7 @@ class Function(cntk_py.Function):
         output_map = {v: None for v in outputs}
         keep_for_backward = set(keep_for_backward or {})
 
-        state = super(Function, self)._forward(in_var_map, output_map, device,
+        state = super(FunctionMixIn, self)._forward(in_var_map, output_map, device,
                                              keep_for_backward)
 
         for k in output_map:
@@ -365,9 +369,9 @@ class Function(cntk_py.Function):
 
         unique_wrt = set(wrt)
         output = [self.output]
-        df, f = self.forward(at, output, set(output), device)
-        ones = {self.output: np.ones_like(v) for v in f.values()}
-        grad_dict = self.backward(df, ones, unique_wrt)
+        state, results = self.forward(at, output, set(output), device)
+        ones = {self.output: np.ones_like(v) for v in results.values()}
+        grad_dict = self.backward(state, ones, unique_wrt)
         return [grad_dict[v] for v in wrt]
 
     @property
@@ -376,21 +380,21 @@ class Function(cntk_py.Function):
         '''
         List of all input variables of this function.
         '''
-        return super(Function, self).inputs()
+        return super(FunctionMixIn, self).inputs()
 
     @property
     def name(self):
         '''
         Name of this function
         '''
-        return super(Function, self).name()
+        return super(FunctionMixIn, self).name()
 
     @property
     def op_name(self):
         '''
         Name of the operation that this Function performs
         '''
-        return super(Function, self).op_name()
+        return super(FunctionMixIn, self).op_name()
 
     @property
     @typemap
@@ -398,7 +402,7 @@ class Function(cntk_py.Function):
         '''
         The single output variable if there is only one, or raises an exception.
         '''
-        return super(Function, self).output()
+        return super(FunctionMixIn, self).output()
 
     @property
     @typemap
@@ -406,7 +410,7 @@ class Function(cntk_py.Function):
         '''
         List consisting of all output variables of this function.
         '''
-        return super(Function, self).outputs()
+        return super(FunctionMixIn, self).outputs()
 
     @property
     @typemap
@@ -414,7 +418,7 @@ class Function(cntk_py.Function):
         '''
         List of all parameter variables of this function.
         '''
-        return super(Function, self).parameters()
+        return super(FunctionMixIn, self).parameters()
 
     @property
     @typemap
@@ -422,7 +426,7 @@ class Function(cntk_py.Function):
         '''
         List of all placeholders variables of this function.
         '''
-        return super(Function, self).placeholders()
+        return super(FunctionMixIn, self).placeholders()
 
     @property
     @typemap
@@ -430,7 +434,7 @@ class Function(cntk_py.Function):
         '''
         The primitive function at the root of the graph of functions underlying this function.
         '''
-        return super(Function, self).root_function()
+        return super(FunctionMixIn, self).root_function()
 
     @property
     @typemap
@@ -438,7 +442,7 @@ class Function(cntk_py.Function):
         '''
         The internally generated unique name of the function.
         '''
-        return super(Function, self).uid()
+        return super(FunctionMixIn, self).uid()
 
     @typemap
     def replace_placeholders(self, substitutions):
@@ -452,7 +456,7 @@ class Function(cntk_py.Function):
         Returns:
             :class:`Function`: itself
         '''
-        return super(Function, self).replace_placeholders(substitutions)
+        return super(FunctionMixIn, self).replace_placeholders(substitutions)
 
     @typemap
     def replace_placeholder(self, substitution):
@@ -469,7 +473,7 @@ class Function(cntk_py.Function):
 
         :raises ExceptionType: when the function has multiple placeholders.
         '''
-        return super(Function, self).replace_placeholder(substitution)
+        return super(FunctionMixIn, self).replace_placeholder(substitution)
 
     @typemap
     def find_all_with_name(self, name):
@@ -545,7 +549,7 @@ class Function(cntk_py.Function):
         Args:
             filename (str): model path
         '''
-        return super(Function, self).save_model(filename)
+        return super(FunctionMixIn, self).save_model(filename)
 
     @typemap
     def restore_model(self, filename):
@@ -558,7 +562,135 @@ class Function(cntk_py.Function):
         Returns:
             `None`: this method only has the side-effect of loading the model parameters from the file
         '''
-        return super(Function, self).restore_model(filename)
+        return super(FunctionMixIn, self).restore_model(filename)
+
+class Function(FunctionMixIn, cntk_py.Function):
+    '''
+    Base class of all primitive tensor operators.
+
+    If it has only one output, one can invoke Variable methods on it, which it
+    will relay to its only output.
+    '''
+
+class UserFunction(FunctionMixIn, cntk_py.UserFunction):
+    '''
+    Base class of all user extension functions.
+
+    If it has only one output, one can invoke Variable methods on it, which it
+    will relay to its only output.
+    '''
+    def __init__(self, inputs, outputs, op_name, name=''):
+        var_inputs = []
+        # TODO: this should be done in Swig
+        for i in inputs:
+            if isinstance(i, cntk_py.Variable):
+                var_inputs.append(i)
+            elif isinstance(i, cntk_py.Function):
+                var_inputs.append(i.output)
+            else:
+                raise ValueError('expected Variable, but got "%s"'%type(i))
+        super(UserFunction, self).__init__(var_inputs, outputs, name, op_name)
+
+    def _forward(self, arguments, outputs, device=None, outputs_to_retain=None):
+        '''
+        Computes the values of speficied variables in ``outputs``, using values
+        provided in ``arguments`` that correspond to each input `Variable` of
+        the function whose ``is_input`` is `True`.
+
+        This function calls :func:`forward`, which is to be implemented by the
+        user.
+
+        Args:
+            arguments: maps variables to their input data. 
+            TBD
+
+            outputs (iterable): outputs to fetch values for.
+            device (:class:`~cntk.device.DeviceDescriptor`, default `None`): the device
+             descriptor that contains the type and id of the device on which the
+             computation is. If `None`, the default device is used.
+
+        Returns:
+             A tuple (BackpropState, map of outputs to NumPy arrays). The
+             BackpropState is a handle taken by :func:`backward`.
+        '''
+        for v in arguments:
+            arguments[v] = value_to_seq(arguments[v])
+
+        map_if_possible(arguments)
+        map_if_possible(outputs)
+        map_if_possible(outputs_to_retain)
+
+        state, results = self.forward(arguments, outputs, device, outputs_to_retain)
+        # import ipdb;ipdb.set_trace()
+        if state is None:
+            state = cntk_py.UserBackPropState(self, device, 77)
+        elif not isinstance(state, cntk_py.BackPropState):
+            state = cntk_py.UserBackPropState(self, device, state)
+
+        for k,v in outputs.items():
+            if v is None:
+                raise ValueError('not all outputs have been provided')
+
+            # FIXME: seq_starts
+            outputs[k] = sanitize_batch(k, v, None, None, device)
+
+        return state, outputs
+
+    def forward(self, arguments, outputs, device=None, outputs_to_retain=None):
+        raise NotImplementedError
+
+    def _backward(self, state, root_gradients, variables):
+        '''
+        Backpropagates supplied ``root_gradients`` for one or more of the output
+        variables of the Function, to calculate gradients with respect to
+        ``variables``. Formally, multiplies the values of ``root_gradients`` by
+        the Jacobian of the Function and returns the subset of the output that
+        corresponds to ``variables``.
+
+        This function calls :func:`backward`, which is to be implemented by the
+        user.
+
+        Example:
+            TBD
+
+        Args:
+            state (BackPropState): state obtained from a previous call to the
+             func:`cntk.ops.Function.forward` method on this Function for the
+             computation that this gradient backpropagation corresponds to.
+            root_gradients (dict): the gradients that will be backpropagated
+            variables (set): a list of input variables with respect to which
+             the gradients have to be computed.
+
+        Returns:
+            dict: mapping of ``variables`` to NumPy arrays
+        '''
+        for v in root_gradients:
+            root_gradients[v] = value_to_seq(root_gradients[v])
+        map_if_possible(variables)
+
+        self.backward(state, root_gradients, variables)
+
+        for k,v in variables.items():
+            if v is None:
+                raise ValueError('gradients were not provided for all variables')
+
+            variables[k] = sanitize_batch(k, v, None, None, state.device())
+
+    def backward(self, state, root_gradients, variables):
+        raise NotImplementedError
+
+class UserOutput(cntk_py.UserOutput):
+    '''
+    Holds the specification of one output for :class:UserFunction.
+    '''
+    def __init__(self, shape, dtype, dynamic_axes):
+        dtype = sanitize_dtype_cntk(dtype)
+        for a in dynamic_axes:
+            if not a.is_dynamic_axis:
+                raise ValueError('axis in dynamic_axes attribute is not dynamic')
+        dynamic_axes = list(reversed(dynamic_axes))
+
+        super(UserOutput, self).__init__(shape, dtype, list(dynamic_axes))
 
 @typemap
 def load_model(filename, device=None):

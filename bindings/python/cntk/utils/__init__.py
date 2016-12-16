@@ -17,6 +17,7 @@ from .swig_helper import typemap
 from ..axis import Axis
 from .progress_print import *
 
+_VARIABLE_OR_FUNCTION = (cntk_py.Variable, cntk_py.Function, cntk_py.UserFunction)
 
 def sanitize_precision(precision):
     '''
@@ -114,7 +115,7 @@ def sanitize_input(arg, fallback_dtype=np.float32, reshape=None):
         return arg
 
     # or a Function?
-    if isinstance(arg, cntk_py.Function):
+    if isinstance(arg, (cntk_py.Function, cntk_py.UserFunction)):
         try:
             return arg.output
         except RuntimeError:
@@ -152,7 +153,7 @@ def get_data_type(*args):
 
     cntk_dtypes = set()
     numpy_dtypes = set()
-    if len(args) == 1 and isinstance(args, cntk_py.Function):
+    if len(args) == 1 and isinstance(args, _VARIABLE_OR_FUNCTION):
         args = [args]
 
     for arg in args:
@@ -169,7 +170,7 @@ def get_data_type(*args):
                 raise ValueError(
                     'NumPy type "%s" is not supported' % arg.dtype)
             numpy_dtypes.add(arg.dtype.type)
-        elif isinstance(arg, cntk_py.Function):
+        elif isinstance(arg, _VARIABLE_OR_FUNCTION):
             var_outputs = arg.outputs
             if len(var_outputs) > 1:
                 raise ValueError(
@@ -302,8 +303,8 @@ def sanitize_function(arg):
     if isinstance(arg, cntk_py.Variable):
         arg = arg.owner
 
-    if not isinstance(arg, cntk_py.Function):
-        raise TypeError("Object of type '%s' cannot be cast to Variable" %
+    if not isinstance(arg, (cntk_py.Function, cntk_py.UserFunction)):
+        raise TypeError("Object of type %s cannot be cast to Variable" %
                 str(type(arg)))
 
     return arg
