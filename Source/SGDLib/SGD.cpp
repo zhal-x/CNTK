@@ -158,6 +158,20 @@ static void UpdateBestEpochs(
             nodeBestEpoch.epochIndex = epoch;
         }
     }
+    LOGPRINTF(stderr, "Best epoch per criterion so far [Validate]: ");
+    for (size_t i = 0; i < cvSetTrainAndEvalNodes.size(); ++i)
+    {
+        const BestEpoch& bestEpoch = criteriaBestEpoch.at(cvSetTrainAndEvalNodes[i]);
+        fprintf(
+            stderr,
+            "%ls = %f (%d)",
+            cvSetTrainAndEvalNodes[i].c_str(),
+            bestEpoch.criterionMinValue,
+            bestEpoch.epochIndex);
+        if (i + 1 < cvSetTrainAndEvalNodes.size())
+            fprintf(stderr, ";");
+    }
+    fprintf(stderr, "\n");
 }
 
 // For each criterion copies the best epoch to the new file with criterion name appended.
