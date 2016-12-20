@@ -118,12 +118,6 @@ def load_data_and_vocab(training_file):
     
     return data, char_to_ix, ix_to_char, data_size, vocab_size
 
-# Create minibatch source using cntk text format file
-def create_reader(path, randomize, size=INFINITELY_REPEAT):
-    return MinibatchSource(CTFDeserializer(path, StreamDefs(
-        word_stream  = StreamDef(field='S0', shape=input_vocab_size, is_sparse=True)
-    )), randomize=randomize, epoch_size = size)
-
 # Creates the model to train
 def create_model(output_dim):
     
@@ -144,16 +138,23 @@ def create_inputs(vocab_dim):
     
     return input_sequence, label_sequence
 
-
-# Creates and trains a character-level language model
-def train_lm(training_file, vocab_dim):
-
-    # Source and target inputs to the model
+# Model inputs
+def create_inputs(vocab_dim):
     batch_axis = Axis.default_batch_axis()
     input_seq_axis = Axis('inputAxis')
 
     input_dynamic_axes = [batch_axis, input_seq_axis]
-    raw_input = input_variable(shape=(input_vocab_dim), dynamic_axes=input_dynamic_axes, name='raw_input')
+    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
+    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
+    
+    return input_sequence, label_sequence
+
+# Creates and trains a character-level language model
+def train_lm(training_file):
+
+    # load the data and vocab
+    data, char_to_ix, ix_to_char, data_size, vocab_dim = load_data_and_vocab(training_file)
+
     # Model the source and target inputs to the model
     input_sequence, label_sequence = create_inputs(vocab_dim)
 
@@ -233,8 +234,6 @@ def load_and_sample(model_filename, vocab_filename, prime_text='', use_hardmax=F
     ff.close()
 
 if __name__=='__main__':    
-    # Train data reader
-    train_reader = create_reader("cmudict-0.7b.train-dev-20-21.ctf", True)
 
     # train the LM    
     train_lm("data/tinyshakespeare.txt")
@@ -242,6 +241,3 @@ if __name__=='__main__':
     # load and sample
     text = "T"
     load_and_sample("models/shakespeare_epoch0.dnn", "tinyshakespeare.txt.vocab", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
-
-    # Validation/Test data reader 
-    #valid_reader = create_reader("tiny.ctf", False)
