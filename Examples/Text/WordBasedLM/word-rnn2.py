@@ -6,6 +6,7 @@
 
 import numpy as np
 import os
+import cntk as C
 from cntk import Trainer, Axis
 from cntk.learner import momentum_sgd, momentum_as_time_constant_schedule, learning_rate_schedule, UnitType
 from cntk.ops import input_variable, cross_entropy_with_softmax, classification_error
@@ -27,12 +28,11 @@ def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
     xi = [word_to_ix[ch] for ch in data[p:p+minibatch_size]]
     yi = [word_to_ix[ch] for ch in data[p+1:p+minibatch_size+1]]
     
-    # a slightly inefficient way to get one-hot vectors but fine for low vocab (like char-lm)
-    X = np.eye(vocab_dim, dtype=np.float32)[xi]
-    Y = np.eye(vocab_dim, dtype=np.float32)[yi]
+    X = C.one_hot([xi], vocab_dim)
+    Y = C.one_hot([yi], vocab_dim)
 
     # return a list of numpy arrays for each of X (features) and Y (labels)
-    return [X], [Y]
+    return X, Y
 
 # Sample from the network
 def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, temperature=1.0):
@@ -240,8 +240,8 @@ def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_har
 if __name__=='__main__':    
 
     # train the LM    
-    #train_lm("data/test.txt", "data/test_w2i.txt", 100)
+    train_lm("data/test.txt", "data/test_w2i.txt", 51)
 
     # load and sample
     text = "aaa"
-    load_and_sample("models/shakespeare_epoch99.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
+    load_and_sample("models/shakespeare_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
