@@ -35,7 +35,7 @@ def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
     return [X], [Y]
 
 # Sample from the network
-def sample(root, ix_to_char, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, temperature=1.0):
+def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, temperature=1.0):
 
     # temperature: T < 1 means smoother; T=1.0 means same; T > 1 means more peaked
     def apply_temp(p):
@@ -60,8 +60,9 @@ def sample(root, ix_to_char, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
     # start sequence with first input    
     x = np.zeros((1, vocab_dim), dtype=np.float32)    
     if prime_text != '':
-        plen = len(prime_text)
-        prime = word_to_ix[prime_text[0]]
+        words = prime_text.split()
+        plen = len(words)
+        prime = word_to_ix[words[0]]
     else:
         prime = np.random.choice(range(vocab_dim))
     x[0, prime] = 1
@@ -78,7 +79,7 @@ def sample(root, ix_to_char, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
         # reset
         x = np.zeros((1, vocab_dim), dtype=np.float32)
         if i < plen-1:
-            idx = word_to_ix[prime_text[i+1]]
+            idx = word_to_ix[words[i+1]]
         else:
             idx = sample_word(p)
 
@@ -97,7 +98,7 @@ def sample(root, ix_to_char, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
         arguments = ([x], [False])
 
     # return output
-    return ''.join([ix_to_char[c] for c in output])
+    return ' '.join([ix_to_word[id] for id in output])
 
 # read the mapping word_to_ix from file (tab sepparted)
 def load_word_to_ix(word_to_ix_file_path):
@@ -222,17 +223,15 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
         p += minibatch_size
         
 
-def load_and_sample(model_filename, vocab_filename, prime_text='', use_hardmax=False, length=1000, temperature=1.0):
+def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_hardmax=False, length=1000, temperature=1.0):
     
     # load the model
     model = load_model(model_filename)
     
     # load the vocab
-    chars = [c[0] for c in open(vocab_filename).readlines()]
-    word_to_ix = { ch:i for i,ch in enumerate(chars) }
-    ix_to_char = { i:ch for i,ch in enumerate(chars) }
-        
-    output = sample(model, ix_to_char, len(chars), word_to_ix, prime_text=prime_text, use_hardmax=use_hardmax, length=length, temperature=temperature)
+    word_to_ix, ix_to_char = load_word_to_ix(word_to_ix_file_path)
+    
+    output = sample(model, ix_to_char, len(word_to_ix), word_to_ix, prime_text=prime_text, use_hardmax=use_hardmax, length=length, temperature=temperature)
     
     ff = open('output.txt', 'w', encoding='utf-8')
     ff.write(output)
@@ -241,8 +240,8 @@ def load_and_sample(model_filename, vocab_filename, prime_text='', use_hardmax=F
 if __name__=='__main__':    
 
     # train the LM    
-    train_lm("data/test.txt", "data/test_w2i.txt", 100)
+    #train_lm("data/test.txt", "data/test_w2i.txt", 100)
 
     # load and sample
-    #text = "aaa"
-    #load_and_sample("models/shakespeare_epoch0.dnn", "tinyshakespeare.txt.vocab", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
+    text = "aaa"
+    load_and_sample("models/shakespeare_epoch99.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
