@@ -102,18 +102,22 @@ def sample(root, ix_to_char, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
 # read the mapping word_to_ix from file (tab sepparted)
 def load_word_to_ix(word_to_ix_file_path):
     word_to_ix = {}
+    ix_to_word = {}
     f = open(word_to_ix_file_path,'r')
     for line in f:
         entry = line.split('\t')
         if len(entry) == 2:
             word_to_ix[entry[0]] = int(entry[1])
+            ix_to_word[int(entry[1])] = entry[0]
+
+    return (word_to_ix, ix_to_word)
 
 # read text and map it into a list of word indices
 def load_data_and_vocab(training_file_path, word_to_ix_file_path):
-    word_to_ix = load_word_to_ix(word_to_ix_file_path)
+    word_to_ix, ix_to_word = load_word_to_ix(word_to_ix_file_path)
 
-    # represent text be sequence of words indices 'word_indices'
-    rel_path = training_file
+    # represent text be sequence of words indices 'word_sequence'
+    rel_path = training_file_path
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), rel_path)
     text_file = open(path, "r")
     word_sequence = []
@@ -125,10 +129,10 @@ def load_data_and_vocab(training_file_path, word_to_ix_file_path):
                 sys.exit()
             word_sequence.append(word)
 
-    word_count = len(word_indices)
+    word_count = len(word_sequence)
     vocab_size = len(word_to_ix)
 
-    return word_indices, word_to_ix, null, word_count, vocab_size
+    return word_sequence, word_to_ix, ix_to_word, word_count, vocab_size
 
 # Creates the model to train
 def create_model(output_dim):
@@ -151,10 +155,10 @@ def create_inputs(vocab_dim):
     return input_sequence, label_sequence
 
 # Creates and trains a character-level language model
-def train_lm(training_file):
+def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
 
     # load the data and vocab
-    data, word_to_ix, ix_to_char, data_size, vocab_dim = load_data_and_vocab(training_file)
+    data, word_to_ix, ix_to_char, data_size, vocab_dim = load_data_and_vocab(training_file, word_to_ix_file_path)
 
     # Model the source and target inputs to the model
     input_sequence, label_sequence = create_inputs(vocab_dim)
@@ -179,23 +183,22 @@ def train_lm(training_file):
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
     trainer = Trainer(z, ce, errs, learner)
 
-    sample_freq = 1000
     epochs = 50
     minibatches_per_epoch = int((data_size / minibatch_size))
-    minibatches = epochs * minibatches_per_epoch
+    total_num_minibatches = total_num_epochs * minibatches_per_epoch
     
     # print out some useful training information
     log_number_of_parameters(z) ; print()
     progress_printer = ProgressPrinter(freq=100, tag='Training')    
     
-    e = 0
+    epoche_count = 0
     p = 0
-    for i in range(0, minibatches):
+    for i in range(0, total_num_minibatches):
 
         if p + minibatch_size+1 >= data_size:
             p = 0
-            e += 1
-            model_filename = "models/shakespeare_epoch%d.dnn" % e
+            epoche_count += 1
+            model_filename = "models/shakespeare_epoch%d.dnn" % epoche_count
             z.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
@@ -212,7 +215,8 @@ def train_lm(training_file):
 
         progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
         
-        if i % sample_freq == 0:
+        num_minbatches_between_printing_samples = 1000
+        if i % num_minbatches_between_printing_samples == 0:
             print(sample(z, ix_to_char, vocab_dim, word_to_ix))
 
         p += minibatch_size
@@ -237,8 +241,8 @@ def load_and_sample(model_filename, vocab_filename, prime_text='', use_hardmax=F
 if __name__=='__main__':    
 
     # train the LM    
-    train_lm("data/tinyshakespeare.txt")
+    train_lm("data/test.txt", "data/test_w2i.txt", 100)
 
     # load and sample
-    text = "T"
-    load_and_sample("models/shakespeare_epoch0.dnn", "tinyshakespeare.txt.vocab", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
+    #text = "aaa"
+    #load_and_sample("models/shakespeare_epoch0.dnn", "tinyshakespeare.txt.vocab", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
