@@ -21,11 +21,11 @@ num_layers = 2
 minibatch_size = 100 # also how much time we unroll the RNN for
 
 # Get data
-def get_data(p, minibatch_size, data, char_to_ix, vocab_dim):
+def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
 
-    # the character LM predicts the next character so get sequences offset by 1
-    xi = [char_to_ix[ch] for ch in data[p:p+minibatch_size]]
-    yi = [char_to_ix[ch] for ch in data[p+1:p+minibatch_size+1]]
+    # the word LM predicts the next character so get sequences offset by 1
+    xi = [word_to_ix[ch] for ch in data[p:p+minibatch_size]]
+    yi = [word_to_ix[ch] for ch in data[p+1:p+minibatch_size+1]]
     
     # a slightly inefficient way to get one-hot vectors but fine for low vocab (like char-lm)
     X = np.eye(vocab_dim, dtype=np.float32)[xi]
@@ -35,7 +35,7 @@ def get_data(p, minibatch_size, data, char_to_ix, vocab_dim):
     return [X], [Y]
 
 # Sample from the network
-def sample(root, ix_to_char, vocab_dim, char_to_ix, prime_text='', use_hardmax=True, length=100, temperature=1.0):
+def sample(root, ix_to_char, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, temperature=1.0):
 
     # temperature: T < 1 means smoother; T=1.0 means same; T > 1 means more peaked
     def apply_temp(p):
@@ -61,7 +61,7 @@ def sample(root, ix_to_char, vocab_dim, char_to_ix, prime_text='', use_hardmax=T
     x = np.zeros((1, vocab_dim), dtype=np.float32)    
     if prime_text != '':
         plen = len(prime_text)
-        prime = char_to_ix[prime_text[0]]
+        prime = word_to_ix[prime_text[0]]
     else:
         prime = np.random.choice(range(vocab_dim))
     x[0, prime] = 1
@@ -78,7 +78,7 @@ def sample(root, ix_to_char, vocab_dim, char_to_ix, prime_text='', use_hardmax=T
         # reset
         x = np.zeros((1, vocab_dim), dtype=np.float32)
         if i < plen-1:
-            idx = char_to_ix[prime_text[i+1]]
+            idx = word_to_ix[prime_text[i+1]]
         else:
             idx = sample_word(p)
 
@@ -99,24 +99,36 @@ def sample(root, ix_to_char, vocab_dim, char_to_ix, prime_text='', use_hardmax=T
     # return output
     return ''.join([ix_to_char[c] for c in output])
 
-def load_data_and_vocab(training_file):
-    
-    # load data
+# read the mapping word_to_ix from file (tab sepparted)
+def load_word_to_ix(word_to_ix_file_path):
+    word_to_ix = {}
+    f = open(word_to_ix_file_path,'r')
+    for line in f:
+        entry = line.split('\t')
+        if len(entry) == 2:
+            word_to_ix[entry[0]] = int(entry[1])
+
+# read text and map it into a list of word indices
+def load_data_and_vocab(training_file_path, word_to_ix_file_path):
+    word_to_ix = load_word_to_ix(word_to_ix_file_path)
+
+    # represent text be sequence of words indices 'word_indices'
     rel_path = training_file
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), rel_path)
-    data = open(path, "r").read()
-    chars = sorted(list(set(data)))
-    data_size, vocab_size = len(data), len(chars)
-    print('data has %d characters, %d unique.' % (data_size, vocab_size))
-    char_to_ix = { ch:i for i,ch in enumerate(chars) }
-    ix_to_char = { i:ch for i,ch in enumerate(chars) }
+    text_file = open(path, "r")
+    word_sequence = []
+    for line in text_file:
+        words = line.split()
+        for word in words:
+            if not word in word_to_ix:
+                print ("ERROR: word without id: " + word)
+                sys.exit()
+            word_sequence.append(word)
 
-    # write vocab for future use
-    with open(path + ".vocab", "w") as ff:
-        for c in chars:
-            ff.write("%s\n" % c) if c != '\n' else ff.write("\n")
-    
-    return data, char_to_ix, ix_to_char, data_size, vocab_size
+    word_count = len(word_indices)
+    vocab_size = len(word_to_ix)
+
+    return word_indices, word_to_ix, null, word_count, vocab_size
 
 # Creates the model to train
 def create_model(output_dim):
@@ -138,22 +150,11 @@ def create_inputs(vocab_dim):
     
     return input_sequence, label_sequence
 
-# Model inputs
-def create_inputs(vocab_dim):
-    batch_axis = Axis.default_batch_axis()
-    input_seq_axis = Axis('inputAxis')
-
-    input_dynamic_axes = [batch_axis, input_seq_axis]
-    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
-    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
-    
-    return input_sequence, label_sequence
-
 # Creates and trains a character-level language model
 def train_lm(training_file):
 
     # load the data and vocab
-    data, char_to_ix, ix_to_char, data_size, vocab_dim = load_data_and_vocab(training_file)
+    data, word_to_ix, ix_to_char, data_size, vocab_dim = load_data_and_vocab(training_file)
 
     # Model the source and target inputs to the model
     input_sequence, label_sequence = create_inputs(vocab_dim)
@@ -199,7 +200,7 @@ def train_lm(training_file):
             print("Saved model to '%s'" % model_filename)
 
         # get the data            
-        features, labels = get_data(p, minibatch_size, data, char_to_ix, vocab_dim)
+        features, labels = get_data(p, minibatch_size, data, word_to_ix, vocab_dim)
 
         # Specify the mapping of input variables in the model to actual minibatch data to be trained with
         # If it's the start of the data, we specify that we are looking at a new sequence (True)
@@ -212,7 +213,7 @@ def train_lm(training_file):
         progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
         
         if i % sample_freq == 0:
-            print(sample(z, ix_to_char, vocab_dim, char_to_ix))
+            print(sample(z, ix_to_char, vocab_dim, word_to_ix))
 
         p += minibatch_size
         
@@ -224,10 +225,10 @@ def load_and_sample(model_filename, vocab_filename, prime_text='', use_hardmax=F
     
     # load the vocab
     chars = [c[0] for c in open(vocab_filename).readlines()]
-    char_to_ix = { ch:i for i,ch in enumerate(chars) }
+    word_to_ix = { ch:i for i,ch in enumerate(chars) }
     ix_to_char = { i:ch for i,ch in enumerate(chars) }
         
-    output = sample(model, ix_to_char, len(chars), char_to_ix, prime_text=prime_text, use_hardmax=use_hardmax, length=length, temperature=temperature)
+    output = sample(model, ix_to_char, len(chars), word_to_ix, prime_text=prime_text, use_hardmax=use_hardmax, length=length, temperature=temperature)
     
     ff = open('output.txt', 'w', encoding='utf-8')
     ff.write(output)
