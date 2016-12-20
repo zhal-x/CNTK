@@ -17,8 +17,8 @@ from cntk.models import LayerStack, Sequential
 from cntk.utils import log_number_of_parameters, ProgressPrinter
 
 # model hyperparameters
-hidden_dim = 256
-num_layers = 2
+hidden_dim = 32
+num_layers = 1
 minibatch_size = 100 # also how much time we unroll the RNN for
 
 # Get data
@@ -34,14 +34,14 @@ def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
     # return a list of numpy arrays for each of X (features) and Y (labels)
     return X, Y
 
-# Sample from the network
-def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, temperature=1.0):
+# Sample words from the model
+def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, alpha=1.0):
 
-    # temperature: T < 1 means smoother; T=1.0 means same; T > 1 means more peaked
+    # alpha < 1 means smoother; alpha == 1.0 means same; alpha > 1 means more peaked
     def apply_temp(p):
         # apply temperature
-        p = np.power(p, (temperature))
-        # renormalize and return
+        p = np.power(p, alpha)
+        # normalize and return
         return (p / np.sum(p))
 
     def sample_word(p):
@@ -49,7 +49,7 @@ def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
             w = np.argmax(p, axis=2)[0,0]
         else:
             # normalize probabilities then take weighted sample
-            p = np.exp(p) / np.sum(np.exp(p))            
+            p = np.exp(p)
             p = apply_temp(p)
             w = np.random.choice(range(vocab_dim), p=p.ravel())
         return w
@@ -141,7 +141,7 @@ def create_model(output_dim):
     return Sequential([        
         LayerStack(num_layers, lambda: 
                    Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)])),
-        Dense(output_dim)
+        Dense(output_dim, activation = None)
     ])
 
 # Model inputs
@@ -199,7 +199,7 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
         if p + minibatch_size+1 >= data_size:
             p = 0
             epoche_count += 1
-            model_filename = "models/shakespeare_epoch%d.dnn" % epoche_count
+            model_filename = "models/lm_epoch%d.dnn" % epoche_count
             z.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
@@ -240,8 +240,8 @@ def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_har
 if __name__=='__main__':    
 
     # train the LM    
-    train_lm("data/test.txt", "data/test_w2i.txt", 51)
+    #train_lm("data/test.txt", "data/test_w2i.txt", 51)
 
     # load and sample
-    text = "aaa"
-    load_and_sample("models/shakespeare_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=0.95)
+    text = "aaa bbb ccc ddd eee aaa bbb ccc"
+    load_and_sample("models/lm_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=1.0)
