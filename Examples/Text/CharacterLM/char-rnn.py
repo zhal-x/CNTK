@@ -4,6 +4,7 @@
 # for full license information.
 # ==============================================================================
 
+from __future__ import print_function
 import numpy as np
 import os
 from cntk import Trainer, Axis
@@ -126,17 +127,6 @@ def create_model(output_dim):
                    Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)])),
         Dense(output_dim)
     ])
-
-# Model inputs
-def create_inputs(vocab_dim):
-    batch_axis = Axis.default_batch_axis()
-    input_seq_axis = Axis('inputAxis')
-
-    input_dynamic_axes = [batch_axis, input_seq_axis]
-    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
-    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
-    
-    return input_sequence, label_sequence
 
 # Model inputs
 def create_inputs(vocab_dim):
