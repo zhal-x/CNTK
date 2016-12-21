@@ -21,6 +21,43 @@ hidden_dim = 32
 num_layers = 1
 minibatch_size = 100 # also how much time we unroll the RNN for
 
+def cross_entropy_with_sampled_softmax(output_vector, target_vector, num_samples, sampling_weights, vocab_dim, hidden_dim, allow_duplicates=False, name=''):
+    bias = C.Parameter(shape = (vocab_dim, 1), init = C.init_bias_default_or_0, name='B')
+    weights = C.Parameter(shape = (vocab_dim, hidden_dim), init = C.init_default_or_glorot_uniform, name='E')
+    sample_selector = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
+    inclusion_probs = C.random_sample_inclusion_frequency(sampling_weights, num_samples, allow_duplicates) # dense row [1 * vocal_size]
+    log_prior = C.log(inclusion_probs) # dense row [1 * vocal_size]
+    print("shape weights %s" % str(weights.shape))
+    print("shape logPrior %s" % str(log_prior.shape))
+
+    wS = C.times(sample_selector, weights) # [num_samples * hidden_dim] 
+    print("shape ws %s" % str(wS.shape))
+    zS = C.times_transpose(wS, output_vector) + C.times(sample_selector, bias) - C.times_transpose (sample_selector, log_prior)# [numSamples]
+    print("shape zs %s" % str(zS.shape))
+
+    # Getting the weight vector for the true label. Dimension numHidden
+    wT = C.times(target_vector, weights) # [1 * numHidden]
+    print("shape wT %s" % str(wT.shape))
+    zT = C.times_transpose(wT, output_vector) +  C.times(target_vector, bias) - C.times_transpose(target_vector, log_prior) # [1]
+    print("shape zT %s" % str(zT.shape))
+
+    zSReduced = C.reduce_log_sum(zS)
+    print("shape zSReduced %s" % str(zSReduced.shape))
+                                        
+    # The label (true class), might already be among the sampled classes.
+    # To get the 'partition function' over the union of label and sampled classes
+    # we need to LogPlus zT if the label is not among the sampled classes.
+    labelIsInSampled = C.reduce_sum (C.times_transpose(sample_selector, target_vector))
+
+    return (C.times_transpose(weights, output_vector), zSReduced - zT)
+
+    # Check whether the label would have been predicted correctly (among the set of random samples plus label)
+    # error = 1 if the label would have been predicted wrongly
+    # zSMax = ReduceMax (zS)
+    # error = Less (zT, zSMax)
+
+
+
 # Get data
 def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
 
@@ -140,8 +177,7 @@ def create_model(output_dim):
     
     return Sequential([        
         LayerStack(num_layers, lambda: 
-                   Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)])),
-        Dense(output_dim, activation = None)
+                   Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
     ])
 
 # Model inputs
@@ -165,24 +201,26 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
     input_sequence, label_sequence = create_inputs(vocab_dim)
 
     # create the model
-    model = create_model(vocab_dim)
+    rnn = create_model(vocab_dim)
     
-    # and apply it to the input sequence    
-    z = model(input_sequence)
+    # and apply it to the input sequence
+    z = rnn(input_sequence)
 
     # setup the criterions (loss and metric)
-    ce = cross_entropy_with_softmax(z, label_sequence)
-    errs = classification_error(z, label_sequence)
+    sampling_weights = C.reshape(C.Constant(np.array([1,1,1,1,1])), shape = (1,vocab_dim))
+    model, ce = cross_entropy_with_sampled_softmax(z, label_sequence, 2, sampling_weights, vocab_dim, hidden_dim, name = 'sampled_softmax')
+
+    errs = C.constant(0) + 0
 
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(0.001, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
     clipping_threshold_per_sample = 5.0
     gradient_clipping_with_truncation = True
-    learner = momentum_sgd(z.parameters, lr_per_sample, momentum_time_constant, 
+    learner = momentum_sgd(ce.parameters, lr_per_sample, momentum_time_constant, 
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-    trainer = Trainer(z, ce, errs, learner)
+    trainer = Trainer(model, ce, errs, learner)
 
     epochs = 50
     minibatches_per_epoch = int((data_size / minibatch_size))
@@ -217,8 +255,8 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
         progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
         
         num_minbatches_between_printing_samples = 1000
-        if i % num_minbatches_between_printing_samples == 0:
-            print(sample(z, ix_to_char, vocab_dim, word_to_ix))
+#        if i % num_minbatches_between_printing_samples == 0:
+#            print(sample(z, ix_to_char, vocab_dim, word_to_ix))
 
         p += minibatch_size
         
@@ -240,8 +278,8 @@ def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_har
 if __name__=='__main__':    
 
     # train the LM    
-    #train_lm("data/test.txt", "data/test_w2i.txt", 51)
+    train_lm("data/test.txt", "data/test_w2i.txt", 1)
 
     # load and sample
-    text = "aaa bbb ccc ddd eee aaa bbb ccc"
-    load_and_sample("models/lm_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=1.0)
+    #text = "aaa bbb ccc ddd eee aaa bbb ccc"
+    #load_and_sample("models/lm_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=1.0)

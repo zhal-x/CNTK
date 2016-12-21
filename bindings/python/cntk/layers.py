@@ -80,7 +80,7 @@ def Dense(shape, init=init_default_or_glorot_uniform, activation=activation_defa
 # To create an embedding from a file, use this:
 #  Embedding(weights=np.load('PATH'))
 def Embedding(shape=None, init=None, weights=None):
-    if init is not None or weights is not None:
+    if init is not None and weights is not None:
         raise ValueError('Embedding: init and weights options are mutually exclusive')
 
     # parameters bound to this Function:
