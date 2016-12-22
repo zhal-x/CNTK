@@ -46,16 +46,9 @@ def cross_entropy_with_sampled_softmax(output_vector, target_vector, num_samples
     z = C.times_transpose(weights, output_vector) + bias
     z = C.reshape(z, shape = (vocab_dim))
     zSMax = C.reduce_max(zS)
-    error_on_samples = C.less(zT, zS)
+    error_on_samples = C.less(zT, zSMax)
     print("error_on_samples.shape="+str(error_on_samples.shape))
     return (z, ce, error_on_samples)
-
-    # Check whether the label would have been predicted correctly (among the set of random samples plus label)
-    # error = 1 if the label would have been predicted wrongly
-    # zSMax = ReduceMax (zS)
-    # error = Less (zT, zSMax)
-
-
 
 # Get data
 def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
@@ -73,20 +66,13 @@ def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
 # Sample words from the model
 def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, alpha=1.0):
 
-    # alpha < 1 means smoother; alpha == 1.0 means same; alpha > 1 means more peaked
-    def apply_temp(p):
-        # apply temperature
-        p = np.power(p, alpha)
-        # normalize and return
-        return (p / np.sum(p))
-
     def sample_word(p):
         if use_hardmax:
             w = np.argmax(p, axis=2)[0,0]
         else:
             # normalize probabilities then take weighted sample
-            p = np.exp(p)
-            p = apply_temp(p)
+            p = np.exp(alpha* (p-np.max(p)))
+            p = p/np.sum(p)
             w = np.random.choice(range(vocab_dim), p=p.ravel())
         return w
 
@@ -225,7 +211,7 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
     
     # print out some useful training information
     log_number_of_parameters(z) ; print()
-    progress_printer = ProgressPrinter(freq=100, tag='Training')    
+    progress_printer = ProgressPrinter(freq=1, tag='Training')    
     
     epoche_count = 0
     p = 0
@@ -235,7 +221,7 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
             p = 0
             epoche_count += 1
             model_filename = "models/lm_epoch%d.dnn" % epoche_count
-            z.save_model(model_filename)
+            model.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
         # get the datafor next batch
@@ -258,7 +244,7 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
         p += minibatch_size
         
 
-def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_hardmax=False, length=1000, temperature=1.0):
+def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_hardmax=False, length=1000, alpha=1.0):
     
     # load the model
     model = load_model(model_filename)
@@ -266,7 +252,7 @@ def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_har
     # load the vocab
     word_to_ix, ix_to_char = load_word_to_ix(word_to_ix_file_path)
     
-    output = sample(model, ix_to_char, len(word_to_ix), word_to_ix, prime_text=prime_text, use_hardmax=use_hardmax, length=length, temperature=temperature)
+    output = sample(model, ix_to_char, len(word_to_ix), word_to_ix, prime_text=prime_text, use_hardmax=use_hardmax, length=length, alpha=alpha)
     
     ff = open('output.txt', 'w', encoding='utf-8')
     ff.write(output)
@@ -277,9 +263,14 @@ if __name__=='__main__':
     input()
     print("continuing...")
 
+    num_epochs = 50
+    input_text_file = "data/test.txt"
+    input_word2index_file = "data/test_w2i.txt"
+
     # train the LM    
-    train_lm("data/test.txt", "data/test_w2i.txt", 10)
+    train_lm(input_text_file, input_word2index_file, num_epochs)
 
     # load and sample
-    text = "aaa bbb ccc ddd eee aaa bbb ccc"
-    load_and_sample("models/lm_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=1.0)
+    priming_text = ""
+    final_model_file = "models/lm_epoch%i.dnn" % (num_epochs-1)
+    load_and_sample(final_model_file, input_word2index_file, prime_text = priming_text, use_hardmax = False, length = 100, alpha = 10.0)
