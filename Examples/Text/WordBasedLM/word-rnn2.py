@@ -17,7 +17,7 @@ from cntk.models import LayerStack, Sequential
 from cntk.utils import log_number_of_parameters, ProgressPrinter
 
 # model hyperparameters
-hidden_dim = 32
+hidden_dim = 256
 num_layers = 1
 minibatch_size = 100 # also how much time we unroll the RNN for
 
@@ -30,15 +30,15 @@ def cross_entropy_with_sampled_softmax(output_vector, target_vector, num_samples
     print("shape weights %s" % str(weights.shape))
     print("shape logPrior %s" % str(log_prior.shape))
 
-    wS = C.times(sample_selector, weights) # [num_samples * hidden_dim] 
+    wS = C.times(sample_selector, weights, name='wS') # [num_samples * hidden_dim] 
     print("shape ws %s" % str(wS.shape))
-    zS = C.times_transpose(wS, output_vector) + C.times(sample_selector, bias) - C.times_transpose (sample_selector, log_prior)# [numSamples]
+    zS = C.times_transpose(wS, output_vector, name='zS1') + C.times(sample_selector, bias, name='zS2') - C.times_transpose (sample_selector, log_prior, name='zS3')# [numSamples]
     print("shape zs %s" % str(zS.shape))
 
     # Getting the weight vector for the true label. Dimension numHidden
-    wT = C.times(target_vector, weights) # [1 * numHidden]
+    wT = C.times(target_vector, weights, name='wT') # [1 * numHidden]
     print("shape wT %s" % str(wT.shape))
-    zT = C.times_transpose(wT, output_vector) +  C.times(target_vector, bias) - C.times_transpose(target_vector, log_prior) # [1]
+    zT = C.times_transpose(wT, output_vector, name='zT1') +  C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
     print("shape zT %s" % str(zT.shape))
 
     zSReduced = C.reduce_log_sum(zS)
@@ -176,6 +176,7 @@ def load_data_and_vocab(training_file_path, word_to_ix_file_path):
 def create_model(output_dim):
     
     return Sequential([        
+        C.Embedding(hidden_dim),
         LayerStack(num_layers, lambda: 
                    Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
     ])
@@ -186,8 +187,8 @@ def create_inputs(vocab_dim):
     input_seq_axis = Axis('inputAxis')
 
     input_dynamic_axes = [batch_axis, input_seq_axis]
-    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
-    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes)
+    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes, is_sparse = True)
+    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes, is_sparse = True)
     
     return input_sequence, label_sequence
 
@@ -275,10 +276,13 @@ def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_har
     ff.write(output)
     ff.close()
 
-if __name__=='__main__':    
+if __name__=='__main__':
+    print("press return")
+    input()
+    print("continuing...")
 
     # train the LM    
-    train_lm("data/test.txt", "data/test_w2i.txt", 1)
+    train_lm("data/test.txt", "data/test_w2i.txt", 10)
 
     # load and sample
     #text = "aaa bbb ccc ddd eee aaa bbb ccc"
