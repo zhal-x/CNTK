@@ -27,29 +27,28 @@ def cross_entropy_with_sampled_softmax(output_vector, target_vector, num_samples
     sample_selector = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
     inclusion_probs = C.random_sample_inclusion_frequency(sampling_weights, num_samples, allow_duplicates) # dense row [1 * vocal_size]
     log_prior = C.log(inclusion_probs) # dense row [1 * vocal_size]
-    print("shape weights %s" % str(weights.shape))
-    print("shape logPrior %s" % str(log_prior.shape))
 
     wS = C.times(sample_selector, weights, name='wS') # [num_samples * hidden_dim] 
-    print("shape ws %s" % str(wS.shape))
     zS = C.times_transpose(wS, output_vector, name='zS1') + C.times(sample_selector, bias, name='zS2') - C.times_transpose (sample_selector, log_prior, name='zS3')# [numSamples]
-    print("shape zs %s" % str(zS.shape))
 
     # Getting the weight vector for the true label. Dimension numHidden
     wT = C.times(target_vector, weights, name='wT') # [1 * numHidden]
-    print("shape wT %s" % str(wT.shape))
     zT = C.times_transpose(wT, output_vector, name='zT1') +  C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
-    print("shape zT %s" % str(zT.shape))
 
     zSReduced = C.reduce_log_sum(zS)
-    print("shape zSReduced %s" % str(zSReduced.shape))
                                         
     # The label (true class), might already be among the sampled classes.
     # To get the 'partition function' over the union of label and sampled classes
     # we need to LogPlus zT if the label is not among the sampled classes.
     labelIsInSampled = C.reduce_sum (C.times_transpose(sample_selector, target_vector))
 
-    return (C.times_transpose(weights, output_vector), zSReduced - zT)
+    ce = zSReduced - zT
+    z = C.times_transpose(weights, output_vector) + bias
+    z = C.reshape(z, shape = (vocab_dim))
+    zSMax = C.reduce_max(zS)
+    error_on_samples = C.less(zT, zS)
+    print("error_on_samples.shape="+str(error_on_samples.shape))
+    return (z, ce, error_on_samples)
 
     # Check whether the label would have been predicted correctly (among the set of random samples plus label)
     # error = 1 if the label would have been predicted wrongly
@@ -95,44 +94,42 @@ def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
     prime = -1
 
     # start sequence with first input    
-    x = np.zeros((1, vocab_dim), dtype=np.float32)    
     if prime_text != '':
         words = prime_text.split()
         plen = len(words)
         prime = word_to_ix[words[0]]
     else:
         prime = np.random.choice(range(vocab_dim))
-    x[0, prime] = 1
-    arguments = ([x], [True])
+    x = C.one_hot([[int(prime)]], vocab_dim)
+
+    arguments = (x, [True])
 
     # setup a list for the output characters and add the initial prime text
     output = []
     output.append(prime)
     
     # loop through prime text
-    for i in range(plen):            
-        p = root.eval(arguments)        
-        
+    for i in range(plen):
+        p = root.eval(arguments)
         # reset
-        x = np.zeros((1, vocab_dim), dtype=np.float32)
         if i < plen-1:
             idx = word_to_ix[words[i+1]]
         else:
             idx = sample_word(p)
 
         output.append(idx)
-        x[0, idx] = 1            
-        arguments = ([x], [False])
+        x = C.one_hot([[int(idx)]], vocab_dim)
+           
+        arguments = (x, [False])
     
     # loop through length of generated text, sampling along the way
     for i in range(length-plen):
         p = root.eval(arguments)
         idx = sample_word(p)
         output.append(idx)
+        x = C.one_hot([[int(idx)]], vocab_dim)
 
-        x = np.zeros((1, vocab_dim), dtype=np.float32)
-        x[0, idx] = 1
-        arguments = ([x], [False])
+        arguments = (x, [False])
 
     # return output
     return ' '.join([ix_to_word[id] for id in output])
@@ -209,9 +206,9 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
 
     # setup the criterions (loss and metric)
     sampling_weights = C.reshape(C.Constant(np.array([1,1,1,1,1])), shape = (1,vocab_dim))
-    model, ce = cross_entropy_with_sampled_softmax(z, label_sequence, 2, sampling_weights, vocab_dim, hidden_dim, name = 'sampled_softmax')
+    model, ce, error_on_samples = cross_entropy_with_sampled_softmax(z, label_sequence, 2, sampling_weights, vocab_dim, hidden_dim, name = 'sampled_softmax')
 
-    errs = C.constant(0) + 0
+    #errs = C.constant(0) + 0
 
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(0.001, UnitType.sample)
@@ -221,9 +218,8 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
     learner = momentum_sgd(ce.parameters, lr_per_sample, momentum_time_constant, 
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-    trainer = Trainer(model, ce, errs, learner)
+    trainer = Trainer(model, ce, error_on_samples, learner)
 
-    epochs = 50
     minibatches_per_epoch = int((data_size / minibatch_size))
     total_num_minibatches = total_num_epochs * minibatches_per_epoch
     
@@ -242,7 +238,7 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
             z.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
-        # get the data            
+        # get the datafor next batch
         features, labels = get_data(p, minibatch_size, data, word_to_ix, vocab_dim)
 
         # Specify the mapping of input variables in the model to actual minibatch data to be trained with
@@ -255,9 +251,9 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
 
         progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
         
-        num_minbatches_between_printing_samples = 1000
-#        if i % num_minbatches_between_printing_samples == 0:
-#            print(sample(z, ix_to_char, vocab_dim, word_to_ix))
+        num_minbatches_between_printing_samples = 2
+        if i % num_minbatches_between_printing_samples == 0:
+            print(sample(model, ix_to_char, vocab_dim, word_to_ix))
 
         p += minibatch_size
         
@@ -285,5 +281,5 @@ if __name__=='__main__':
     train_lm("data/test.txt", "data/test_w2i.txt", 10)
 
     # load and sample
-    #text = "aaa bbb ccc ddd eee aaa bbb ccc"
-    #load_and_sample("models/lm_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=1.0)
+    text = "aaa bbb ccc ddd eee aaa bbb ccc"
+    load_and_sample("models/lm_epoch49.dnn", "data/test_w2i.txt", prime_text=text, use_hardmax=False, length=100, temperature=1.0)
