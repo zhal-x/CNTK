@@ -438,6 +438,18 @@ class ImageDeserializer(Deserializer):
         '''
         return dict(type='Mean', meanFile=filename)
 
+    @staticmethod
+    def channels():
+        '''
+        Channel reverse transform that switch BGR to RGB
+
+        Args:
+
+        Returns:
+            dict describing the chennels reverse
+        '''
+        return dict(type='Channels')
+
     # TODO color transpose
 
 

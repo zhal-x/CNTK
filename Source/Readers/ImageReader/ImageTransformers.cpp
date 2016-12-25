@@ -380,6 +380,16 @@ void MeanTransformer::Apply(size_t id, cv::Mat &mat)
     }
 }
 
+ChannelsTransformer::ChannelsTransformer(const ConfigParameters &config) : ImageTransformerBase(config)
+{}
+
+void ChannelsTransformer::Apply(size_t id, cv::Mat &mat)
+{
+	UNUSED(id);
+
+	cv::cvtColor(mat, mat, CV_BGR2RGB);
+}
+
 TransposeTransformer::TransposeTransformer(const ConfigParameters& config) : TransformBase(config),
     m_floatTransform(this), m_doubleTransform(this)
 {}

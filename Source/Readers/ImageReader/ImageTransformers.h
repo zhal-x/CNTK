@@ -149,6 +149,16 @@ private:
     cv::Mat m_meanImg;
 };
 
+// Transpose transformation from BGR to RGB
+class ChannelsTransformer : public ImageTransformerBase
+{
+public:
+	explicit ChannelsTransformer(const ConfigParameters&);
+
+private:
+	void Apply(size_t id, cv::Mat &mat) override;
+};
+
 // Transpose transformation from HWC to CHW (note: row-major notation).
 class TransposeTransformer : public TransformBase
 {
