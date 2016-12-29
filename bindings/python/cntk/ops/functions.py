@@ -32,6 +32,10 @@ class CloneMethod(Enum):
     '''
 
 class FunctionMixIn(object):
+    '''
+    Mixin class of attributes and methods that are shared by :class:`Function` and
+    :class:`UserFunction`.
+    '''
     # define input shapes, in-place
     # e.g.
     # model.declare_args(42)
@@ -479,7 +483,7 @@ class FunctionMixIn(object):
     def find_all_with_name(self, name):
         '''
         Returns a list of primitive function with ``name`` in the graph
-        starting from this node. Throws an exceptoin if ``name`` occurs
+        starting from this node. Throws an exception if ``name`` occurs
         multiple times. If you expect only one function to be returned, use
         :func:`find_by_name`.
 
@@ -509,7 +513,7 @@ class FunctionMixIn(object):
     def find_by_name(self, name):
         '''
         Returns a primitive function with ``name`` in the graph starting from
-        this node. Throws an exceptoin if ``name`` occurs multiple times. If
+        this node. Throws an exception if ``name`` occurs multiple times. If
         you expect multiple functions to be returned, use
         :func:`find_all_with_name`.
 
@@ -544,7 +548,8 @@ class FunctionMixIn(object):
     @typemap
     def save_model(self, filename):
         '''
-        Save this function graph into a model file using protobuf-based serialization.
+        Save this function graph into a model file using protobuf-based
+        serialization.
 
         Args:
             filename (str): model path
@@ -570,6 +575,8 @@ class Function(FunctionMixIn, cntk_py.Function):
 
     If it has only one output, one can invoke Variable methods on it, which it
     will relay to its only output.
+
+    For all available methods, see :class:`FunctionMixIn`.
     '''
 
 class UserFunction(FunctionMixIn, cntk_py.UserFunction):
@@ -578,6 +585,8 @@ class UserFunction(FunctionMixIn, cntk_py.UserFunction):
 
     If it has only one output, one can invoke Variable methods on it, which it
     will relay to its only output.
+
+    For all available methods, see :class:`FunctionMixIn`.
     '''
     def __init__(self, inputs, outputs, op_name, name=''):
         var_inputs = []
@@ -621,7 +630,6 @@ class UserFunction(FunctionMixIn, cntk_py.UserFunction):
         map_if_possible(outputs_to_retain)
 
         state, results = self.forward(arguments, outputs, device, outputs_to_retain)
-        # import ipdb;ipdb.set_trace()
         if state is None:
             state = cntk_py.UserBackPropState(self, device, 77)
         elif not isinstance(state, cntk_py.BackPropState):
@@ -632,7 +640,7 @@ class UserFunction(FunctionMixIn, cntk_py.UserFunction):
                 raise ValueError('not all outputs have been provided')
 
             # FIXME: seq_starts
-            outputs[k] = sanitize_batch(k, v, None, None, device)
+            outputs[k] = sanitize_batch(k, v, None, device)
 
         return state, outputs
 
@@ -681,7 +689,7 @@ class UserFunction(FunctionMixIn, cntk_py.UserFunction):
 
 class UserOutput(cntk_py.UserOutput):
     '''
-    Holds the specification of one output for :class:UserFunction.
+    Holds the specification of one output for :class:`UserFunction`.
     '''
     def __init__(self, shape, dtype, dynamic_axes):
         dtype = sanitize_dtype_cntk(dtype)
@@ -696,11 +704,11 @@ class UserOutput(cntk_py.UserOutput):
 def load_model(filename, device=None):
     '''
     Load the model in ``filename``, that has been saved using
-    `:func:save_model`.
+    :func:`~cntk.ops.functions.FunctionMixin.save_model`.
 
     Args:
         filename (str): filename to load the model from
-        device (:class:`~cntk.DeviceDescriptor`, default is the default device):
+        device (:class:`~cntk.device.DeviceDescriptor`, default is the default device):
          instance of DeviceDescriptor
 
     Returns:

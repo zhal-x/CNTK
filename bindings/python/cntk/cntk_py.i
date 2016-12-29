@@ -167,10 +167,6 @@ def dynamic_axes(self):
     }
 }
 
-%typecheck(1000) std::vector<CNTK::Variable>& {
-    $1 = 1;
-}
-
 //
 // Converting Python list {DictionaryValue} to std::vector
 //
@@ -588,6 +584,7 @@ public:
 
         PyObject *py_key, *py_value;
         Py_ssize_t pos = 0;
+        bool found = false;
 
         while (PyDict_Next($input, &pos, &py_key, &py_value)) {
             void *cpp_key = 0 ;
@@ -602,8 +599,14 @@ public:
             CNTK::Variable* cntk_var = reinterpret_cast<CNTK::Variable*>(cpp_key);
             if (*cntk_var == it.first)
             {
+                found = true;
                 PyDict_SetItem($input, py_key, returned_val);
+                break;
             }
+        }
+        if (!found)
+        {
+            RuntimeError("could not convert dictionary");
         }
         Py_DECREF(returned_val);
     }
@@ -640,6 +643,7 @@ public:
 
         PyObject *py_key, *py_value;
         Py_ssize_t pos = 0;
+        bool found = false;
 
         while (PyDict_Next($input, &pos, &py_key, &py_value)) {
             void *cpp_key = 0;
@@ -651,6 +655,8 @@ public:
             CNTK::Variable* cntk_var = reinterpret_cast<CNTK::Variable*>(cpp_key);
             if (*cntk_var == it.first)
             {
+                found = true;
+
                 void *cpp_val = 0;
                 int val_res = SWIG_ConvertPtr(py_value, &cpp_val, SWIGTYPE_p_std__shared_ptrT_CNTK__Value_t, 0);
                 if (!SWIG_IsOK(val_res)) {
@@ -660,7 +666,12 @@ public:
                 CNTK::ValuePtr* cpp_value = reinterpret_cast<CNTK::ValuePtr*>(cpp_val);
 
                 $1[it.first] = *cpp_value;
+                break;
             }
+        }
+        if (!found)
+        {
+            RuntimeError("could not convert dictionary");
         }
     }
 }
@@ -706,7 +717,6 @@ public:
             } else {
                 SWIG_exception(SWIG_TypeError, "tuple expected");
             }
-
         }
 
         $1 = &args_map;
@@ -815,6 +825,7 @@ public:
 
         PyObject *py_key, *py_value;
         Py_ssize_t pos = 0;
+        bool found = false;
 
         while (PyDict_Next($input, &pos, &py_key, &py_value)) {
             void *cpp_key = 0 ;
@@ -829,8 +840,14 @@ public:
             CNTK::StreamInformation* cntk_var = reinterpret_cast<CNTK::StreamInformation*>(cpp_key);
             if (*cntk_var == it.first)
             {
+                found = true;
                 PyDict_SetItem($input, py_key, PyTuple_Pack(2, returned_val1, returned_val2));
+                break;
             }
+        }
+        if (!found)
+        {
+            RuntimeError("could not convert dictionary");
         }
         Py_DECREF(returned_val1);
         Py_DECREF(returned_val2);
@@ -1314,6 +1331,7 @@ namespace CNTK {
         Dictionary Serialize() const override { NOT_IMPLEMENTED; }
         size_t CurrentVersion() const override { NOT_IMPLEMENTED; }
 
+    private:
         std::vector<Variable> GetOutputVariables(
                 const std::vector<UserOutput> outputs)
         {
@@ -1331,7 +1349,6 @@ namespace CNTK {
             return outputVariables;
         }
 
-    private:
         const std::wstring& m_opName;
     };
 

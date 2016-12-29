@@ -530,6 +530,9 @@ class Value(cntk_py.Value):
         Returns:
             :class:`Value` object.
         '''
+        if not isinstance(var, cntk_py.Variable):
+            raise TypeError('Variable expected, but got "%s"'%type(var))
+
         if isinstance(batch, np.ndarray):
             # The outermost axis has to be Python list. If the user passes a
             # full minibatch as one NumPy array, we have to convert it.
