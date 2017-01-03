@@ -21,7 +21,7 @@ public:
         size_t numberOfBuffers = 2) :
         SequencePacker(sequenceEnumerator, streams, useLocalTimeline, maxNumberOfInvalidSequences, numberOfBuffers)
     {}
-s
+
 protected:
     MBLayoutPtr CreateMBLayout(const StreamBatch& batch) override;
 };
