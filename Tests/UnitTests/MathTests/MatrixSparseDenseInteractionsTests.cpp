@@ -137,7 +137,7 @@ BOOST_FIXTURE_TEST_CASE(MatrixDenseTimesSparse, RandomSeedFixture)
 BOOST_FIXTURE_TEST_CASE(CPUMatrixDenseTimesSparse, RandomSeedFixture)
 {
 #pragma warning(push)
-#pragma warning(disable : 4459)
+#pragma warning(disable : 4459) // declaration of 'identifier' hides global declaration
     // TODO: test fails with large dimensions
     size_t dim1 = 4, dim2 = 2;
 #pragma warning(pop)
