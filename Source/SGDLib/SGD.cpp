@@ -24,7 +24,7 @@
 
 // TODO: fix the reason for this warning!
 #pragma warning(push)
-#pragma warning(disable : 4457)
+#pragma warning(disable : 4457) // declaration of 'identifier' hides function parameter
 #include "BlockMomentumSGD.h"
 #include "V2BlockMomentumSGD.h"
 #pragma warning(pop)
