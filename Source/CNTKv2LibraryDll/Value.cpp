@@ -451,17 +451,21 @@ namespace CNTK
         size_t numSequences = 1;
 
         if (Shape().Rank() < varRank)
-            RuntimeError("The Value'rank should be greater than or equal to the variable's rank.");
+            InvalidArgument("The Value'rank should be greater than or equal to the variable's rank.");
 
-        size_t maskRank = Shape().Rank() - varRank;
         if (outputVariable.Shape() != Shape().SubShape(0, varRank))
-            RuntimeError("The shape of the outputVariable does not match the Value shape.");
+            InvalidArgument("The shape of the outputVariable does not match the Value shape.");
 
         if (outputVariable.DynamicAxes().size() > 2)
-            LogicError("More than 2 dynamic axis for a variable is currently unsupported");
+            InvalidArgument("More than 2 dynamic axis for a variable is currently unsupported");
 
+        size_t maskRank = Shape().Rank() - varRank;
         if (maskRank > 2)
-            LogicError("Value rank which is larger than the output variable rank by more than 2 dynamic axes is currently unsupported.");
+            InvalidArgument("Value rank which is larger than the output variable rank by more than 2 dynamic axes is currently unsupported.");
+
+        auto mask = Mask();
+        if ((mask != nullptr) && ((varRank + mask->Shape().Rank()) != Shape().Rank()))
+            InvalidArgument("Invalid Value object; the sum of the rank of the mask and data does not equal the Variable's rank + number of dynamic axes");
 
         std::tie(maxSequenceLength, numSequences) = GetNumTimeStepsAndSequences(Shape().SubShape(varRank), outputVariable.DynamicAxes().size());
 
