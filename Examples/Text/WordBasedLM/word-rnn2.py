@@ -15,11 +15,12 @@ from cntk.blocks import LSTM, Stabilizer
 from cntk.layers import Recurrence, Dense
 from cntk.models import LayerStack, Sequential
 from cntk.utils import log_number_of_parameters, ProgressPrinter
+from data_reader import *
 
 # model hyperparameters
 hidden_dim = 256
 num_layers = 1
-minibatch_size = 100 # also how much time we unroll the RNN for
+minibatch_size = 257 # also how much time we unroll the RNN for
 
 def cross_entropy_with_sampled_softmax(output_vector, target_vector, num_samples, sampling_weights, vocab_dim, hidden_dim, allow_duplicates=False, name=''):
     bias = C.Parameter(shape = (vocab_dim, 1), init = C.init_bias_default_or_0, name='B')
@@ -33,37 +34,23 @@ def cross_entropy_with_sampled_softmax(output_vector, target_vector, num_samples
 
     # Getting the weight vector for the true label. Dimension numHidden
     wT = C.times(target_vector, weights, name='wT') # [1 * numHidden]
-    zT = C.times_transpose(wT, output_vector, name='zT1') +  C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
+    zT = C.times_transpose(wT, output_vector, name='zT1') + C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
 
     zSReduced = C.reduce_log_sum(zS)
-                                        
-    # The label (true class), might already be among the sampled classes.
-    # To get the 'partition function' over the union of label and sampled classes
-    # we need to LogPlus zT if the label is not among the sampled classes.
-    labelIsInSampled = C.reduce_sum (C.times_transpose(sample_selector, target_vector))
 
-    ce = zSReduced - zT
+    cross_entropy_on_samples = zSReduced - zT
+
+    # for testing purposes setup cross entropy with full softmax
     z = C.times_transpose(weights, output_vector) + bias
     z = C.reshape(z, shape = (vocab_dim))
+    zReduced = C.reduce_log_sum(zS)
+    cross_entropy_with_full_softmax = zReduced - output_vector
+
     zSMax = C.reduce_max(zS)
     error_on_samples = C.less(zT, zSMax)
-    print("error_on_samples.shape="+str(error_on_samples.shape))
-    return (z, ce, error_on_samples)
+    return (z, cross_entropy_on_samples, error_on_samples, cross_entropy_with_full_softmax)
 
-# Get data
-def get_data(p, minibatch_size, data, word_to_ix, vocab_dim):
-
-    # the word LM predicts the next character so get sequences offset by 1
-    xi = [word_to_ix[ch] for ch in data[p:p+minibatch_size]]
-    yi = [word_to_ix[ch] for ch in data[p+1:p+minibatch_size+1]]
-    
-    X = C.one_hot([xi], vocab_dim)
-    Y = C.one_hot([yi], vocab_dim)
-
-    # return a list of numpy arrays for each of X (features) and Y (labels)
-    return X, Y
-
-# Sample words from the model
+# Generate sequences from the model
 def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=True, length=100, alpha=1.0):
 
     def sample_word(p):
@@ -120,43 +107,9 @@ def sample(root, ix_to_word, vocab_dim, word_to_ix, prime_text='', use_hardmax=T
     # return output
     return ' '.join([ix_to_word[id] for id in output])
 
-# read the mapping word_to_ix from file (tab sepparted)
-def load_word_to_ix(word_to_ix_file_path):
-    word_to_ix = {}
-    ix_to_word = {}
-    f = open(word_to_ix_file_path,'r')
-    for line in f:
-        entry = line.split('\t')
-        if len(entry) == 2:
-            word_to_ix[entry[0]] = int(entry[1])
-            ix_to_word[int(entry[1])] = entry[0]
 
-    return (word_to_ix, ix_to_word)
-
-# read text and map it into a list of word indices
-def load_data_and_vocab(training_file_path, word_to_ix_file_path):
-    word_to_ix, ix_to_word = load_word_to_ix(word_to_ix_file_path)
-
-    # represent text be sequence of words indices 'word_sequence'
-    rel_path = training_file_path
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), rel_path)
-    text_file = open(path, "r")
-    word_sequence = []
-    for line in text_file:
-        words = line.split()
-        for word in words:
-            if not word in word_to_ix:
-                print ("ERROR: word without id: " + word)
-                sys.exit()
-            word_sequence.append(word)
-
-    word_count = len(word_sequence)
-    vocab_size = len(word_to_ix)
-
-    return word_sequence, word_to_ix, ix_to_word, word_count, vocab_size
-
-# Creates the model to train
-def create_model(output_dim):
+# Define the model to train
+def create_model():
     
     return Sequential([        
         C.Embedding(hidden_dim),
@@ -176,7 +129,7 @@ def create_inputs(vocab_dim):
     return input_sequence, label_sequence
 
 # Creates and trains a character-level language model
-def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
+def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha):
 
     # load the data and vocab
     data, word_to_ix, ix_to_char, data_size, vocab_dim = load_data_and_vocab(training_file, word_to_ix_file_path)
@@ -185,16 +138,16 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
     input_sequence, label_sequence = create_inputs(vocab_dim)
 
     # create the model
-    rnn = create_model(vocab_dim)
+    rnn = create_model()
     
     # and apply it to the input sequence
     z = rnn(input_sequence)
 
     # setup the criterions (loss and metric)
-    sampling_weights = C.reshape(C.Constant(np.array([1,1,1,1,1])), shape = (1,vocab_dim))
-    model, ce, error_on_samples = cross_entropy_with_sampled_softmax(z, label_sequence, 2, sampling_weights, vocab_dim, hidden_dim, name = 'sampled_softmax')
-
-    #errs = C.constant(0) + 0
+    weights = load_sampling_weights(sampling_weights_file_path)
+    smoothed_weights = np.float32( np.power(weights, alpha))
+    sampling_weights = C.reshape(C.Constant(smoothed_weights), shape = (1,vocab_dim))
+    model, ce, error_on_samples, cross_entropy_with_full_softmax = cross_entropy_with_sampled_softmax(z, label_sequence, softmax_sample_size, sampling_weights, vocab_dim, hidden_dim, name = 'sampled_softmax')
 
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(0.001, UnitType.sample)
@@ -211,6 +164,7 @@ def train_lm(training_file, word_to_ix_file_path, total_num_epochs):
     
     # print out some useful training information
     log_number_of_parameters(z) ; print()
+    log_number_of_parameters(model) ; print()
     progress_printer = ProgressPrinter(freq=1, tag='Training')    
     
     epoche_count = 0
@@ -263,14 +217,16 @@ if __name__=='__main__':
     input()
     print("continuing...")
 
-    num_epochs = 50
-    input_text_file = "data/test.txt"
-    input_word2index_file = "data/test_w2i.txt"
+    num_epochs = 32
+    input_text_file = "ptbData/ptb.train.txt"
+    input_word2index_file = "ptbData/ptb.word2id.txt"
+    input_sampling_weights = "ptbData/ptb.freq.txt"
+    
 
     # train the LM    
-    train_lm(input_text_file, input_word2index_file, num_epochs)
+    train_lm(input_text_file, input_word2index_file, input_sampling_weights, num_epochs, 1000, 0.5)
 
     # load and sample
     priming_text = ""
     final_model_file = "models/lm_epoch%i.dnn" % (num_epochs-1)
-    load_and_sample(final_model_file, input_word2index_file, prime_text = priming_text, use_hardmax = False, length = 100, alpha = 10.0)
+    load_and_sample(final_model_file, input_word2index_file, prime_text = priming_text, use_hardmax = False, length = 100, alpha = 1.0)
