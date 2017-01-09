@@ -14,6 +14,9 @@ from cntk.layers import Recurrence, Convolution
 from cntk.utils import _as_tuple
 import cntk.ops as ops
 import cntk
+import ReasoNet.wordvocab as vocab
+import ReasoNet.utils as utils
+import math
 
 def testModel(data):
   reader = create_reader(data, 10, False)
@@ -84,10 +87,17 @@ def testReasoNetPred(data):
     print('')
     print("Prediction: {0}\n\t=>{1}\n".format(i, np.argmax(np.reshape(i, 10))))
 
-def testReasoNetTrain(data, epoch_size, max_epochs=1, vocab_dim=101000, hidden_dim=300, max_rl_iter =5):
-  reader = create_reader(data, vocab_dim, True)
-  model = create_model(vocab_dim, hidden_dim, embedded_dim=100, max_rl_iter=max_rl_iter)
-  rsn.train(model, reader, max_epochs=max_epochs, epoch_size=epoch_size)
+def testReasoNetTrain(data, epoch_size, max_epochs=1, vocab_dim=101000, hidden_dim=300, embedding_dim=100, max_rl_iter =5, embedding_path=None, vocab_path=None, eval_path=None, eval_size=None):
+  train_data = create_reader(data, vocab_dim, True, rand_size=epoch_size)
+  eval_data = create_reader(eval_path, vocab_dim, False, rand_size=eval_size) if eval_path is not None else None
+  embedding_init = None
+  if embedding_path:
+    scale = math.sqrt(6/(vocab_dim+embedding_dim))*2
+    init = utils.uniform_initializer(scale, -scale/2)
+    embedding_init = vocab.load_embedding(embedding_path, vocab_path, embedding_dim, init)
+
+  model = create_model(vocab_dim, hidden_dim, embedding_init=embedding_init, embedding_dim=embedding_dim, max_rl_iter=max_rl_iter)
+  rsn.train(model, train_data, max_epochs=max_epochs, epoch_size=epoch_size, save_model_flag=True, model_name=os.path.basename(data), eval_data=eval_data, eval_size=eval_size)
 
 def testASR(data):
   reader = asr.create_reader(data, 10, False)
@@ -133,6 +143,34 @@ def testSparse(data, vocab_dim=101000, hidden_dim=300, max_rl_iter =5):
   o = su.eval({context_var:context_data})
   print(o)
 
+def test_load_embedding(embedding_path, vocab_path, dim):
+  init = utils.uniform_initializer()
+  emb = vocab.load_embedding(embedding_path, vocab_path, dim, init)
+  print(emb.shape)
+  print(emb[0])
+  print(emb[-1])
+
+def test_next_minibatch(data_path, data_size, eval_path, eval_size, vocab_dim):
+  data=create_reader(data_path, vocab_dim, True, rand_size=data_size)
+  eval_data=create_reader(eval_path, vocab_dim, False, rand_size=eval_size)
+  i=0
+  seqs = 0
+  while i<data_size:
+    mb = data.next_minibatch(12000)
+    samples = mb[data.streams.label].num_samples
+    seqs += mb[data.streams.label].num_sequences
+    i+=samples
+  print("Samples:{}, Seqs:{}".format(i, seqs))
+
+  i=0
+  seqs = 0
+  while i<eval_size:
+    mb = eval_data.next_minibatch(12000)
+    samples = mb[eval_data.streams.label].num_samples
+    seqs += mb[eval_data.streams.label].num_sequences
+    i+=samples
+  print("Samples:{}, Seqs:{}".format(i, seqs))
+
 #testGRU()
 #testASR("test.idx")
 #testModel("test.idx")
@@ -141,11 +179,10 @@ def testSparse(data, vocab_dim=101000, hidden_dim=300, max_rl_iter =5):
 #testReasoNetTrain("test.idx", 10, vocab_dim=10, hidden_dim=5, max_rl_iter=3)
 #testReasoNetPred("test.idx")
 
-#testReasoNetTrain("test.5.idx", 5968, max_epochs=5, vocab_dim=101000, hidden_dim=300, max_rl_iter=5)
-#testReasoNetTrain("test.7.idx", 7394, max_epochs=5, vocab_dim=101000, hidden_dim=300, max_rl_iter=5)
-#testReasoNetTrain("test.10.idx", 11238, max_epochs=5, vocab_dim=101000, hidden_dim=300, max_rl_iter=5)
-testReasoNetTrain("test.1000.idx", 1168157, max_epochs=5, vocab_dim=101000, hidden_dim=384, max_rl_iter=5)
-#testReasoNetTrain("test.1000.40k.idx", 1168157, max_epochs=5, vocab_dim=40000, hidden_dim=384, max_rl_iter=5)
-
+#testReasoNetTrain("data/vocab.101000/test.10.idx", 12273, max_epochs=5, vocab_dim=101100, hidden_dim=384, max_rl_iter=5, embedding_path='data/Glove_Embedding/glove.6B.100d.txt', vocab_path='data/vocab.101000/vocab.101000.idx')
+#testReasoNetTrain("data/vocab.101000/test.1000.idx", 1168157, max_epochs=5, vocab_dim=101100, hidden_dim=384, max_rl_iter=5, embedding_path='data/Glove_Embedding/glove.6B.100d.txt', vocab_path='data/vocab.101000/vocab.101000.idx',eval_path="data/vocab.101000/eval.1000.idx", eval_size=1159400)
+testReasoNetTrain("data/vocab.101000/train.269000.idx", 314766717, max_epochs=5, vocab_dim=101100, hidden_dim=384, max_rl_iter=5, embedding_path='data/Glove_Embedding/glove.6B.100d.txt', vocab_path='data/vocab.101000/vocab.101000.idx',eval_path="data/vocab.101000/eval.1000.idx", eval_size=1159400)
 
 #testSparse("test.idx", 101000)
+#test_load_embedding('data/Glove_Embedding/glove.6B.100d.txt', 'vocab.101000.idx', 100)
+#test_next_minibatch("data/vocab.101000/test.1000.idx", 1168157, eval_path="data/vocab.101000/eval.1000.idx", eval_size=1159400, vocab_dim=101100)

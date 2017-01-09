@@ -1,5 +1,6 @@
 import sys
 import os
+import numpy as np
 
 class WordFreq:
   def __init__(self, word, id, freq):
@@ -44,6 +45,7 @@ class Vocabulary:
     line = src.readline()
     if line == "":
       return
+    line = line.rstrip('\n')
     head = line.split()
     max_size = sys.maxsize
     if len(head) == 2:
@@ -54,6 +56,7 @@ class Vocabulary:
       line = src.readline()
       if line == "":
         break
+      line = line.rstrip('\n')
       items = line.split()
       self.__dict[items[0]] = WordFreq(items[0], int(items[1]), int(items[2]))
       cnt += 1
@@ -65,6 +68,15 @@ class Vocabulary:
       return self.__dict[key]
     else:
       return None
+
+  def values(self):
+    return self.__dict.values()
+
+  def __len__(self):
+    return self.size
+
+  def __contains__(self, q):
+    return q in self.__dict
 
   @staticmethod
   def load_bingvocab(vocab_src):
@@ -97,6 +109,8 @@ class Vocabulary:
       :class:`Vocabulary`: Vocabulary of the entities
       :class:`Vocabulary`: Vocabulary of the words
     """
+    # Leave the first as Unknown
+    max_size -= 1
     word_vocab = Vocabulary("WordVocab")
     entity_vocab = Vocabulary("EntityVocab")
     linenum = 0
@@ -174,7 +188,7 @@ class Vocabulary:
               labels += [1 if ans_item.id==item.id else 0]
             else:
               item = words[q]
-              context_ids += [ (item.id + 1) if item != None else 0 ]
+              context_ids += [ (item.id + 1 + entities.size) if item != None else 0 ]
               is_entity += [0]
               labels += [0]
             pos += 1
@@ -184,7 +198,7 @@ class Vocabulary:
               query_ids += [ item.id + 1 ]
             else:
               item = words[q]
-              query_ids += [ (item.id + 1) if item != None else 0 ]
+              query_ids += [ (item.id + 1 + entities.size) if item != None else 0 ]
           #Write featurized ids
           index.write("{0}".format(seq_id))
           for i in range(max(len(context_ids), len(query_ids))):
@@ -198,3 +212,25 @@ class Vocabulary:
           seq_id += 1
           if seq_id%1000 == 0:
             print("{0} lines parsed.".format(seq_id))
+
+def load_embedding(embedding_path, vocab_path, dim, init=None):
+  entity_vocab, word_vocab = Vocabulary.load_bingvocab(vocab_path)
+  vocab_dim = len(entity_vocab) + len(word_vocab) + 1
+  entity_size = len(entity_vocab)
+  item_embedding = [None]*vocab_dim
+  with open(embedding_path, 'r') as embedding:
+    for line in embedding.readlines():
+      item = line.split(' ')
+      if item[0] in word_vocab:
+        item_embedding[word_vocab[item[0]].id + entity_size + 1] = np.array(item[1:], dtype="|S").astype(np.float32)
+  if init != None:
+    init.reset()
+
+  for i in range(vocab_dim):
+    if item_embedding[i] is None:
+      if init:
+        item_embedding[i] = np.array(init.next(dim), dtype=np.float32)
+      else:
+        item_embedding[i] = np.array([0]*dim, dtype=np.float32)
+  return np.ndarray((vocab_dim, dim), dtype=np.float32, buffer=np.array(item_embedding))
+

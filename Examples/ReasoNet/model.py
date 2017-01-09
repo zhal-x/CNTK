@@ -17,7 +17,9 @@ from cntk.utils import get_train_eval_criterion, get_train_loss, Record, _as_tup
 from cntk.utils.debughelpers import _name_node, _node_name, _node_description, _log_node
 import cntk.utils as utils
 import cntk.learner as learner
-
+from datetime import datetime
+import math
+import cntk.io as io
 
 ########################
 # variables and stuff  #
@@ -33,13 +35,27 @@ import cntk.learner as learner
 # stabilizer
 stabilize = Stabilizer()
 
-def create_reader(path, vocab_dim, randomize, size=INFINITELY_REPEAT):
+logfile = 'log/train_{}.log'.format(datetime.now().strftime("%m-%d_%H.%M.%S"))
+if not os.path.exists("log"):
+  os.mkdir("log")
+if not os.path.exists("model"):
+  os.mkdir("model")
+if os.path.exists(logfile):
+  os.remove(logfile)
+
+def log(message, toconsole=True):
+  if toconsole:
+     print(message)
+  with open(logfile, 'a') as logf:
+    logf.write("{}| {}\n".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message))
+
+def create_reader(path, vocab_dim, randomize, rand_size= io.DEFAULT_RANDOMIZATION_WINDOW, size=INFINITELY_REPEAT):
   return MinibatchSource(CTFDeserializer(path, StreamDefs(
     context  = StreamDef(field='C', shape=vocab_dim, is_sparse=True),
     query    = StreamDef(field='Q', shape=vocab_dim, is_sparse=True),
     entities  = StreamDef(field='E', shape=1, is_sparse=False),
     label   = StreamDef(field='L', shape=1, is_sparse=False)
-    )), randomize=randomize, epoch_size = size)
+    )), randomize=randomize, randomization_window = size)
 
 def text_convolution(win_size, in_dim, out_dim):
   #activation = _resolve_activation(activation)
@@ -80,6 +96,47 @@ def text_convolution(win_size, in_dim, out_dim):
 # define the model     #
 ########################
 
+def gru_cell_opt(shape, init=init_default_or_glorot_uniform, name=''): # (x, (h,c))
+  shape = _as_tuple(shape)
+
+  if len(shape) != 1 :
+    raise ValueError("gru_cell: shape must be vectors (rank-1 tensors)")
+
+  # determine stacking dimensions
+  cell_shape_stacked = shape * 2  # patched dims with stack_axis duplicated 4 times
+
+  # parameters
+  Wz = Parameter(cell_shape_stacked, init = init, name='Wz')
+  Wr = Parameter(cell_shape_stacked, init = init, name='Wr')
+  Wh = Parameter(cell_shape_stacked, init = init, name='Wh')
+  #Uz = Parameter( _INFERRED + shape, init = init, name = 'Uz')
+  #Ur = Parameter( _INFERRED + shape, init = init, name = 'Ur')
+  #Uh = Parameter( _INFERRED + shape, init = init, name = 'Uh')
+  U = Parameter( _INFERRED + (shape[0]*3,), init = init, name = 'Uzrh')
+
+  def create_s_placeholder():
+    # we pass the known dimensions here, which makes dimension inference easier
+    return Placeholder(shape=shape, name='S') # (h, c)
+
+  # parameters to model function
+  x = Placeholder(name='gru_block_arg')
+  prev_status = create_s_placeholder()
+
+  # formula of model function
+  Sn_1 = prev_status
+
+  xU = times(x, U, name='x*Uzrh')
+  xUz = ops.slice(xU, -1, 0, shape[0], name='x*Uz')
+  xUr = ops.slice(xU, -1, shape[0], shape[0]*2, name='x*Ur')
+  xUh = ops.slice(xU, -1, shape[0]*2, shape[0]*3, name='x*Uh')
+  z = sigmoid(xUz + times(Sn_1, Wz, name='h[-1]*Wz'), name='z')
+  r = sigmoid(xUr + times(Sn_1, Wr, name='h[-1]*Wr'), name='r')
+  h = tanh(xUh + times(element_times(Sn_1, r, name='h[-1]@r'), Wh, name='Wh*(h[-1]@r)'), name='h')
+  s = plus(element_times((1-z), h, name='(1-z)@h'), element_times(z, Sn_1, name='z@[h-1]'), name=name)
+  apply_x_s = combine([s])
+  apply_x_s.create_placeholder = create_s_placeholder
+  return apply_x_s
+
 def gru_cell(shape, init=init_default_or_glorot_uniform, name=''): # (x, (h,c))
   shape = _as_tuple(shape)
 
@@ -117,7 +174,6 @@ def gru_cell(shape, init=init_default_or_glorot_uniform, name=''): # (x, (h,c))
   return apply_x_s
 
 def bidirectionalLSTM(hidden_dim, x, splice_outputs=True):
-  fwd = Recurrence(LSTM(hidden_dim), go_backwards=False) (stabilize(x))
   bwd = Recurrence(LSTM(hidden_dim), go_backwards=True ) (stabilize(x))
   if splice_outputs:
     # splice the outputs together
@@ -182,7 +238,7 @@ def attention_rlunit(context_memory, query_memory, entity_memory, hidden_dim, in
 
 #
 # TODO: CNTK current will convert sparse variable to dense after reshape function
-def create_model(vocab_dim, hidden_dim, embedded_dim=100, max_rl_iter=5, init=init_default_or_glorot_uniform):
+def create_model(vocab_dim, hidden_dim,  embedding_init=None,  embedding_dim=100, max_rl_iter=5, init=init_default_or_glorot_uniform):
   # Query and Doc/Context/Paragraph inputs to the model
   batch_axis = Axis.default_batch_axis()
   query_seq_axis = Axis('sourceAxis')
@@ -193,20 +249,23 @@ def create_model(vocab_dim, hidden_dim, embedded_dim=100, max_rl_iter=5, init=in
   context_sequence = input_variable(shape=(vocab_dim), is_sparse=True, dynamic_axes=context_dynamic_axes, name='context')
   candidate_dynamic_axes = [batch_axis, context_seq_axis]
   entity_ids_mask = input_variable(shape=(1,), is_sparse=False, dynamic_axes=context_dynamic_axes, name='entities')
-
   # embedding
-  embedding = parameter(shape=(vocab_dim, embedded_dim), init=uniform(1))
+  if embedding_init is None:
+    embedding = parameter(shape=(vocab_dim, embedding_dim), init=uniform(math.sqrt(6/(vocab_dim+embedding_dim))))
+  else:
+    embedding = parameter(shape=(vocab_dim, embedding_dim), init=None)
+    embedding.value = embedding_init
 
-  # TODO: Use Golve to initialize the embedding
   # TODO: Add dropout to embedding
   query_embedding  = times(query_sequence , embedding)
   context_embedding = times(context_sequence, embedding)
 
   # get source and context representations
   context_memory = bidirectional_gru(hidden_dim, context_embedding, name='Context_Mem')            # shape=(hidden_dim*2, *), *=context_seq_axis
-  entity_condition = greater(entity_ids_mask, 0)
-  entities_all = sequence.gather(entity_condition, entity_condition)
-  entity_memory = sequence.scatter(sequence.gather(context_memory, entity_condition, name='Candidate_Mem'), entities_all)
+  entity_condition = greater(entity_ids_mask, 0, name='condidion')
+  entities_all = sequence.gather(entity_condition, entity_condition, name='entities_all')
+  entity_memory = sequence.gather(context_memory, entity_condition, name='Candidate_Mem')
+  #entity_memory = sequence.scatter(sequence.gather(context_memory, entity_condition, name='Candidate_Mem'), entities_all)
   qfwd, qbwd  = bidirectional_gru(hidden_dim, query_embedding, splice_outputs=False) # shape=(hidden_dim*2, *), *=query_seq_axis
   query_memory = splice((qfwd, qbwd), name='Query_SP')
   # get the source (aka 'query') representation
@@ -260,7 +319,7 @@ def seq_accuracy(pred, label, name=''):
   rlt = o.replace_placeholders({m:sanitize_input(o)})
   max_val = sequence.broadcast_as(sequence.last(rlt), rlt)
   first_max = sequence.first(sequence.where(ops.greater_equal(pred, max_val)))
-  label_idx = sequence.first(sequence.where(ops.equal(label, 1)))
+  label_idx = sequence.first(sequence.where(ops.equal(label, 1), name='Label_idx'))
   return ops.equal(first_max, label_idx, name=name)
 
 def seq_cross_entropy(pred, label, gama=10, name=''):
@@ -289,22 +348,59 @@ def loss(model):
   entity_condition = model.entity_condition
   entities_all = model.entities_all
   answers = model.outputs[-1]
-  labels = sequence.scatter(sequence.gather(labels_raw, entity_condition, name='EntityLabels'), entities_all, name='seq_labels')
+  labels = sequence.gather(labels_raw, entity_condition, name='EntityLabels')
+  #labels = sequence.scatter(sequence.gather(labels_raw, entity_condition, name='EntityLabels'), entities_all, name='seq_labels')
   cross_entroy, accuracy = seq_cross_entropy(answers, labels, name='CrossEntropyLoss')
   apply_loss = combine([cross_entroy, answers, labels, accuracy])
   return Block(apply_loss, 'AvgSoftMaxCrossEntropy', Record(labels=labels_raw))
 
-def train(model, reader, max_epochs=1, save_model_flag=False, epoch_size=270000):
+def bind_data(func, data):
+  bind = {}
+  for arg in func.arguments:
+    if arg.name == 'query':
+      bind[arg] = data.streams.query
+    if arg.name == 'context':
+      bind[arg] = data.streams.context
+    if arg.name == 'entities':
+      bind[arg] = data.streams.entities
+    if arg.name == 'labels':
+      bind[arg] = data.streams.label
+  return bind
+
+def evaluation(trainer, data, bind, minibatch_size, epoch_size):
+  if epoch_size is None:
+    epoch_size = 1
+  for key in bind.keys():
+    if key.name == 'labels':
+      label_arg = key
+      break
+  eval_acc = 0
+  eval_s = 0
+  k = 0
+  print("Start evaluation with {0} samples ...".format(epoch_size))
+  while k < epoch_size:
+    mb = data.next_minibatch(minibatch_size, input_map=bind)
+    k += mb[label_arg].num_samples
+    sm = mb[label_arg].num_sequences
+    avg_acc = trainer.test_minibatch(mb)
+    eval_acc += sm*avg_acc
+    eval_s += sm 
+    sys.stdout.write('.')
+    sys.stdout.flush()
+  eval_acc /= eval_s
+  print("")
+  log("Evaluation Acc: {0}, samples: {1}".format(eval_acc, eval_s))
+
+def train(model, train_data, max_epochs=1, save_model_flag=False, epoch_size=270000, model_name='rsn', eval_data=None, eval_size=None):
   # Criterion nodes
   criterion_loss = loss(model)
   loss_func = criterion_loss.outputs[0]
   eval_func = criterion_loss.outputs[-1]
-  #eval_func = accuracy_func(criterion_loss.outputs[-1], criterion_loss.labels)
   
   # Instantiate the trainer object to drive the model training
-  learning_rate = 0.005
+  learning_rate = 0.05
   lr_schedule = learner.learning_rate_schedule(learning_rate, learner.UnitType.minibatch)
-  minibatch_size = 1024*12
+  minibatch_size = 12000
   momentum = learner.momentum_schedule(0.9) 
   momentum_var = learner.momentum_schedule(0.999)
   clipping_threshold_per_sample = 10.0
@@ -312,25 +408,20 @@ def train(model, reader, max_epochs=1, save_model_flag=False, epoch_size=270000)
   #learn = learner.adam_sgd(model.parameters, lr_schedule, momentum, momentum_var, 
   #           gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
   #           gradient_clipping_with_truncation=gradient_clipping_with_truncation)
+  #learn = learner.adagrad(model.parameters, lr_schedule, gradient_clipping_threshold_per_sample = clipping_threshold_per_sample, gradient_clipping_with_truncation = gradient_clipping_with_truncation)
   learn = learner.momentum_sgd(model.parameters, lr_schedule, momentum, 
               gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
               gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-  trainer = Trainer(model.outputs[-1], loss_func, eval_func, learn)
 
+  trainer = Trainer(model.outputs[-1], loss_func, eval_func, learn)
   # Get minibatches of sequences to train with and perform model training
   # bind inputs to data from readers
-  data_bind = {}
-  label_key = None
-  for arg in criterion_loss.arguments:
-    if arg.name == 'query':
-      data_bind[arg] = reader.streams.query
-    if arg.name == 'context':
-      data_bind[arg] = reader.streams.context
-    if arg.name == 'entities':
-      data_bind[arg] = reader.streams.entities
-    if arg.name == 'labels':
-      label_key = arg
-      data_bind[arg] = reader.streams.label
+  train_bind = bind_data(criterion_loss, train_data)
+  for k in train_bind.keys():
+    if k.name == 'labels':
+      label_key = k
+      break
+  eval_bind = bind_data(criterion_loss, eval_data)
 
   i = 0
   minibatch_count = 0
@@ -340,31 +431,44 @@ def train(model, reader, max_epochs=1, save_model_flag=False, epoch_size=270000)
     loss_numer = 0
     metric_numer = 0
     total_samples = 0
-
-    while i < (epoch+1) * epoch_size:
+    i = 0
+    win_loss = 0
+    win_acc = 0
+    win_samples = 0
+    while i < epoch_size:
       # get next minibatch of training data
       # TODO: Shuffle entities? @yelong
-      mb_train = reader.next_minibatch(minibatch_size, input_map=data_bind)
-
+      mb_train = train_data.next_minibatch(minibatch_size, input_map=train_bind)
+      i += mb_train[label_key].num_samples
       trainer.train_minibatch(mb_train)
-
+      minibatch_count += 1
+      sys.stdout.write('.')
+      sys.stdout.flush()
       # collect epoch-wide stats
       samples = trainer.previous_minibatch_sample_count
       loss_numer += trainer.previous_minibatch_loss_average * samples
       metric_numer += trainer.previous_minibatch_evaluation_average * samples
       total_samples += samples
-
+      win_samples += samples
+      win_loss += trainer.previous_minibatch_loss_average * samples
+      win_acc += trainer.previous_minibatch_evaluation_average * samples
       if int(total_samples/training_progress_output_freq) != int((total_samples-samples)/training_progress_output_freq):
-        print("Minibatch: {}, Train Loss: {}, Train Evaluation Criterion: {}".format(minibatch_count,
-        get_train_loss(trainer), get_train_eval_criterion(trainer)))
-        print("Total sample count = {}, previous minibatch size={}".format(total_samples, samples))
-      i += mb_train[label_key].num_samples
-      minibatch_count += 1
+        print('')
+        log("Lastest sample count = {}, Train Loss: {}, Evalualtion ACC: {}".format(win_samples, win_loss/win_samples, 
+          win_acc/win_samples))
+        log("Total sample count = {}, Train Loss: {}, Evalualtion ACC: {}".format(total_samples, loss_numer/total_samples, 
+          metric_numer/total_samples))
+        win_samples = 0
+        win_loss = 0
+        win_acc = 0
 
-    print("--- EPOCH %d DONE: loss = %f, errs = %.2f%% ---" % (epoch, loss_numer/total_samples, 100.0*(metric_numer/total_samples)))
+    print('')
+    log("--- EPOCH %d: samples=%d, loss = %.2f, acc = %.2f%% ---" % (epoch, total_samples, loss_numer/total_samples, 100.0*(metric_numer/total_samples)))
+    if eval_data:
+      evaluation(trainer, eval_data, eval_bind, minibatch_size, eval_size)
 
     if save_model_flag:
       # save the model every epoch
-      model_filename = os.path.join('model', "model_epoch%d.dnn" % epoch)
+      model_filename = os.path.join('model', "model_%s_%03d.dnn" % (model_name, epoch))
       model.save_model(model_filename)
       print("Saved model to '%s'" % model_filename)
