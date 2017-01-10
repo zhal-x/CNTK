@@ -1,7 +1,8 @@
 import sys
 import os
+modulePath = os.path.abspath(os.path.dirname(os.path.abspath(__file__))+"/../..")
+sys.path.insert(0, modulePath)
 import cntk.device as device
-#device.set_default_device(device.cpu())
 import numpy as np
 from ReasoNet.model import create_model, create_reader, gru_cell
 import ReasoNet.model as rsn
