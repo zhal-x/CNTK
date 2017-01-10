@@ -18,12 +18,7 @@ from cntk.utils import log_number_of_parameters, ProgressPrinter
 from data_reader import *
 from math import log
 
-# model hyperparameters
-hidden_dim = 256
-num_layers = 1
-minibatch_size = 257 # also how much time we unroll the RNN for
-
-# model subgraph computing cross-entropy with sampled softmax
+# Creates model subgraph computing cross-entropy with sampled softmax
 def cross_entropy_with_sampled_softmax(
     hidden_vector,           # Node providing the output of the recurrent layers
     target_vector,           # Node providing the expected labels (as sparse vectors)
@@ -54,15 +49,15 @@ def cross_entropy_with_sampled_softmax(
     # For applying the model we also output a node providing the input for the full softmax
     z = C.times_transpose(weights, hidden_vector) + bias
     z = C.reshape(z, shape = (vocab_dim))
-    zReduced = C.reduce_log_sum(zS)
-    cross_entropy_with_full_softmax = zReduced - hidden_vector
 
     zSMax = C.reduce_max(zS)
     error_on_samples = C.less(zT, zSMax)
-    return (z, cross_entropy_on_samples, error_on_samples, cross_entropy_with_full_softmax)
+    return (z, cross_entropy_on_samples, error_on_samples)
 
 # Computes exp(z[index])/np.sum(exp[z]) for a one-dimensional numpy array in an numerically stable way.
-def softmax(z, index):
+def softmax(z,    # numpy array
+            index # index into the array
+            ):
     max_z = np.max(z)
     return np.exp(z[index] - max_z)/np.sum(np.exp(z - max_z))
 
@@ -70,8 +65,10 @@ def softmax(z, index):
 def compute_average_cross_entropy(
     model_node,          # node computing the inputs to softmax
     word_ids,            # Sequence for which to compute the cross-entropy. Sequence is specified as a list of (word) ids.
-    index_of_prime_word, # Index (of word) to prime the model
-    vocab_dim):
+    index_of_prime_word,  # Index (of word) to prime the model
+    vocab_dim
+    ):
+    
     priming_input = C.one_hot([[index_of_prime_word]], vocab_dim)
     arguments = (priming_input, [True])
 
@@ -162,7 +159,7 @@ def create_model():
                    Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
     ])
 
-# Model inputs
+# Creates model inputs
 def create_inputs(vocab_dim):
     batch_axis = Axis.default_batch_axis()
     input_seq_axis = Axis('inputAxis')
@@ -173,7 +170,7 @@ def create_inputs(vocab_dim):
     
     return input_sequence, label_sequence
 
-# Creates and trains a character-level language model
+# Creates and trains a rnn the language model using sampled softmax as training criterion.
 def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha, input_test_text_file):
 
     # load the data and vocab
@@ -195,7 +192,7 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
     weights = load_sampling_weights(sampling_weights_file_path)
     smoothed_weights = np.float32( np.power(weights, alpha))
     sampling_weights = C.reshape(C.Constant(smoothed_weights), shape = (1,vocab_dim))
-    model, ce, error_on_samples, cross_entropy_with_full_softmax = cross_entropy_with_sampled_softmax(z, label_sequence, softmax_sample_size, sampling_weights, vocab_dim, hidden_dim)
+    model, ce, error_on_samples = cross_entropy_with_sampled_softmax(z, label_sequence, softmax_sample_size, sampling_weights, vocab_dim, hidden_dim)
 
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(0.01, UnitType.sample)
@@ -213,7 +210,7 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
     # print out some useful training information
     log_number_of_parameters(z) ; print()
     log_number_of_parameters(model) ; print()
-    progress_printer = ProgressPrinter(freq=1, tag='Training')    
+    progress_printer = ProgressPrinter(freq=1, tag='Training')
     
     epoche_count = 0
     num_trained_samples_within_current_epoche = 0
@@ -239,20 +236,27 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
         arguments = ({input_sequence : features, label_sequence : labels}, mask)
         trainer.train_minibatch(arguments)
 
-        
         num_samples_between_progress_report = 1000
         if num_trained_samples_since_last_report >= num_samples_between_progress_report:
             progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
             print(sample(model, ix_to_word, word_to_ix, vocab_dim))
-            print("start....")
-            average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, 1, vocab_dim)
+            id_of_priming_token =  word_to_ix['<unk>']
+            average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
             print("average cross entropy:" + str(average_cross_entropy))
             num_samples_between_progress_report = 0
 
         num_trained_samples_since_last_report += minibatch_size
         num_trained_samples_within_current_epoche += minibatch_size
 
-def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_hardmax=False, length=1000, alpha=1.0):
+# Loads the model from the specified file, samples a sequence of specfied length and writes it to the output file.
+def load_and_sample(
+        model_filename,         # Relative path of model file
+        word_to_ix_file_path,   # Relative path of word index file
+        prime_text = '',        # Text to b used for priming the model
+        use_hardmax = False,    # Tells wehter hardmax should be used
+        length = 100,           # Length of the sample to be generated
+        alpha = 1               # Scaling exponent used for tweaking the probablities coming from the model. Used to control diversity of generated sequences.
+        ):
     
     # load the model
     model = load_model(model_filename)
@@ -267,19 +271,23 @@ def load_and_sample(model_filename, word_to_ix_file_path, prime_text='', use_har
     ff.close()
 
 if __name__=='__main__':
-    print("press return")
-    input()
-    print("continuing...")
+    # model hyperparameters
+    hidden_dim = 256
+    num_layers = 1
 
+    # training parameters
+    minibatch_size = 257
     num_epochs = 32
-    input_training_text_file = "ptbData/ptb.train.txt"
-    input_test_text_file = "ptbData/ptb.test.subset.txt"
-    input_word2index_file = "ptbData/ptb.word2id.txt"
-    input_sampling_weights = "ptbData/ptb.freq.txt"
-    
+    alpha_sampling = 0.75
 
-    # train the LM    
-    train_lm(input_training_text_file, input_word2index_file, input_sampling_weights, num_epochs, 1000, 0.5, input_test_text_file)
+    training_text_file = "ptbData/ptb.train.txt"
+    test_text_file = "ptbData/ptb.test.subset.txt"
+    word2index_file = "ptbData/ptb.word2id.txt"
+    sampling_weights_file = "ptbData/ptb.freq.txt"
+
+    # train the LM
+    softmax_sample_size = 300
+    train_lm(training_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha_sampling, test_text_file)
 
     # load and sample
     priming_text = ""
