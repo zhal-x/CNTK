@@ -7,6 +7,7 @@
 import numpy as np
 import os
 import cntk as C
+import timeit
 from cntk import Trainer, Axis
 from cntk.learner import momentum_sgd, momentum_as_time_constant_schedule, learning_rate_schedule, UnitType
 from cntk.ops import input_variable, cross_entropy_with_softmax, classification_error
@@ -217,7 +218,7 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
     num_trained_samples_since_last_report = 0
 
     for i in range(0, total_num_minibatches):
-
+        t_start = timeit.default_timer()
         if num_trained_samples_within_current_epoche + minibatch_size+1 >= data_size:
             num_trained_samples_within_current_epoche = 0
             epoche_count += 1
@@ -235,9 +236,11 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
             mask = [True]
         arguments = ({input_sequence : features, label_sequence : labels}, mask)
         trainer.train_minibatch(arguments)
-
+        t_end =  timeit.default_timer()
+        samples_per_second = minibatch_size / (t_end - t_start)
         num_samples_between_progress_report = 1000
         if num_trained_samples_since_last_report >= num_samples_between_progress_report:
+            print("samples per second:" + str(samples_per_second))
             progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
             print(sample(model, ix_to_word, word_to_ix, vocab_dim))
             id_of_priming_token =  word_to_ix['<unk>']
