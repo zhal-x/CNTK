@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Copyright (c) Microsoft. All rights reserved.
 # Licensed under the MIT license. See LICENSE.md file in the project root
 # for full license information.
@@ -56,11 +56,11 @@ def cross_entropy_with_sampled_softmax(
     return (z, cross_entropy_on_samples, error_on_samples)
 
 # Computes exp(z[index])/np.sum(exp[z]) for a one-dimensional numpy array in an numerically stable way.
-def softmax(z,    # numpy array
+def log_softmax(z,    # numpy array
             index # index into the array
             ):
     max_z = np.max(z)
-    return np.exp(z[index] - max_z)/np.sum(np.exp(z - max_z))
+    return z[index] - max_z - log(np.sum(np.exp(z - max_z)))
 
 # Computes the average cross entropy (in nats) for the specified text
 def compute_average_cross_entropy(
@@ -76,8 +76,8 @@ def compute_average_cross_entropy(
     total_cross_entropy = 0.0
     for word_id in word_ids:
         z = model_node.eval(arguments).flatten()
-        p = softmax(z, word_id)
-        total_cross_entropy += -log(p)
+        log_p = log_softmax(z, word_id)
+        total_cross_entropy -= log_p
         x = C.one_hot([[int(word_id)]], vocab_dim)
         arguments = (x, [False])
 
@@ -171,14 +171,24 @@ def create_inputs(vocab_dim):
     
     return input_sequence, label_sequence
 
+def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim):
+
+    print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=0.5))
+    print("samples per second:" + str(samples_per_second))
+
+    id_of_priming_token =  word_to_ix['<unk>']
+
+    # load the test data
+    word_ids_test = text_file_to_word_ids(validation_text_file, word_to_ix)
+    average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
+    print("average cross entropy:" + str(average_cross_entropy))
+
 # Creates and trains a rnn the language model using sampled softmax as training criterion.
-def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha, input_test_text_file):
+def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha):
 
     # load the data and vocab
-    data, word_to_ix, ix_to_word, data_size, vocab_dim = load_data_and_vocab(training_file, word_to_ix_file_path)
+    data, word_to_ix, ix_to_word, data_size, vocab_dim = load_data_and_vocab(training_text_file, word_to_ix_file_path)
     
-    # load the test data
-    word_ids_test = text_file_to_word_ids(input_test_text_file, word_to_ix)
 
     # Model the source and target inputs to the model
     input_sequence, label_sequence = create_inputs(vocab_dim)
@@ -196,7 +206,7 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
     model, ce, error_on_samples = cross_entropy_with_sampled_softmax(z, label_sequence, softmax_sample_size, sampling_weights, vocab_dim, hidden_dim)
 
     # Instantiate the trainer object to drive the model training
-    lr_per_sample = learning_rate_schedule(0.01, UnitType.sample)
+    lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
     clipping_threshold_per_sample = 5.0
     gradient_clipping_with_truncation = True
@@ -209,7 +219,6 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
     total_num_minibatches = total_num_epochs * minibatches_per_epoch
     
     # print out some useful training information
-    log_number_of_parameters(z) ; print()
     log_number_of_parameters(model) ; print()
     progress_printer = ProgressPrinter(freq=1, tag='Training')
     
@@ -238,15 +247,11 @@ def train_lm(training_file, word_to_ix_file_path, sampling_weights_file_path, to
         trainer.train_minibatch(arguments)
         t_end =  timeit.default_timer()
         samples_per_second = minibatch_size / (t_end - t_start)
+
         num_samples_between_progress_report = 1000
         if num_trained_samples_since_last_report >= num_samples_between_progress_report:
-            print("samples per second:" + str(samples_per_second))
-            progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
-            print(sample(model, ix_to_word, word_to_ix, vocab_dim))
-            id_of_priming_token =  word_to_ix['<unk>']
-            average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
-            print("average cross entropy:" + str(average_cross_entropy))
-            num_samples_between_progress_report = 0
+            print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim)
+            num_trained_samples_since_last_report = 0
 
         num_trained_samples_since_last_report += minibatch_size
         num_trained_samples_within_current_epoche += minibatch_size
@@ -279,9 +284,11 @@ if __name__=='__main__':
     num_layers = 1
 
     # training parameters
-    minibatch_size = 257
+    minibatch_size = 300
     num_epochs = 32
     alpha_sampling = 0.75
+    learning_rate = 0.003
+    softmax_sample_size = 1000
 
     training_text_file = "ptbData/ptb.train.txt"
     test_text_file = "ptbData/ptb.test.subset.txt"
@@ -289,8 +296,7 @@ if __name__=='__main__':
     sampling_weights_file = "ptbData/ptb.freq.txt"
 
     # train the LM
-    softmax_sample_size = 300
-    train_lm(training_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha_sampling, test_text_file)
+    train_lm(training_text_file, test_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha_sampling)
 
     # load and sample
     priming_text = ""
