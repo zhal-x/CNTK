@@ -17,7 +17,7 @@ from cntk.layers import Recurrence, Dense
 from cntk.models import LayerStack, Sequential
 from cntk.utils import log_number_of_parameters, ProgressPrinter
 from data_reader import *
-from math import log
+from math import log, exp
 
 # Creates model subgraph computing cross-entropy with sampled softmax
 def cross_entropy_with_sampled_softmax(
@@ -171,17 +171,16 @@ def create_inputs(vocab_dim):
     
     return input_sequence, label_sequence
 
-def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim):
+def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, total_samples, total_time):
 
-    print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=0.5))
-    print("samples per second:" + str(samples_per_second))
+#    print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=0.5))
 
     id_of_priming_token =  word_to_ix['<unk>']
 
     # load the test data
     word_ids_test = text_file_to_word_ids(validation_text_file, word_to_ix)
     average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
-    print("average cross entropy:" + str(average_cross_entropy))
+    print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
 # Creates and trains a rnn the language model using sampled softmax as training criterion.
 def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha):
@@ -223,6 +222,7 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
     progress_printer = ProgressPrinter(freq=1, tag='Training')
     
     epoche_count = 0
+    num_trained_samples = 0
     num_trained_samples_within_current_epoche = 0
     num_trained_samples_since_last_report = 0
 
@@ -248,11 +248,12 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
         t_end =  timeit.default_timer()
         samples_per_second = minibatch_size / (t_end - t_start)
 
-        num_samples_between_progress_report = 1000
-        if num_trained_samples_since_last_report >= num_samples_between_progress_report:
-            print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim)
+        num_samples_between_progress_report = 250000
+        if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
+            print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
             num_trained_samples_since_last_report = 0
 
+        num_trained_samples += minibatch_size
         num_trained_samples_since_last_report += minibatch_size
         num_trained_samples_within_current_epoche += minibatch_size
 
@@ -279,19 +280,32 @@ def load_and_sample(
     ff.close()
 
 if __name__=='__main__':
-    # model hyperparameters
-    hidden_dim = 256
-    num_layers = 1
+
+    # model sizes according to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
+    type = 'medium'
+
+    if type == 'small':
+        hidden_dim = 200
+        num_layers = 2
+        num_epochs = 13
+    if type == 'medium':
+        hidden_dim = 650
+        num_layers = 2
+        num_epochs = 39
+    elif type == 'large':
+        hidden_dim = 1500
+        num_layers = 2
+        num_epochs = 55
+
 
     # training parameters
     minibatch_size = 300
-    num_epochs = 32
     alpha_sampling = 0.75
     learning_rate = 0.003
     softmax_sample_size = 1000
 
     training_text_file = "ptbData/ptb.train.txt"
-    test_text_file = "ptbData/ptb.test.subset.txt"
+    test_text_file = "ptbData/ptb.valid.subset.txt"
     word2index_file = "ptbData/ptb.word2id.txt"
     sampling_weights_file = "ptbData/ptb.freq.txt"
 
