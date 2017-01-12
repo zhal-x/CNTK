@@ -179,6 +179,7 @@ def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation
 
     # load the test data
     word_ids_test = text_file_to_word_ids(validation_text_file, word_to_ix)
+    word_ids_test = word_ids_test[0:100]
     average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
     print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
@@ -207,7 +208,6 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
-    clipping_threshold_per_sample = 5.0
     gradient_clipping_with_truncation = True
     learner = momentum_sgd(ce.parameters, lr_per_sample, momentum_time_constant, 
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
@@ -248,7 +248,6 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
         t_end =  timeit.default_timer()
         samples_per_second = minibatch_size / (t_end - t_start)
 
-        num_samples_between_progress_report = 250000
         if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
             print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
             num_trained_samples_since_last_report = 0
@@ -282,27 +281,48 @@ def load_and_sample(
 if __name__=='__main__':
 
     # model sizes according to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
-    type = 'medium'
+    type = 'test'
 
-    if type == 'small':
-        hidden_dim = 200
-        num_layers = 2
-        num_epochs = 13
-    if type == 'medium':
+    if type == 'test':
         hidden_dim = 650
         num_layers = 2
         num_epochs = 39
+        minibatch_size = 35
+        alpha_sampling = 0.75
+        learning_rate = 0.003
+        softmax_sample_size = 20
+        clipping_threshold_per_sample = 5.0
+
+    elif type == 'small':
+        hidden_dim = 200
+        num_layers = 2
+        num_epochs = 13
+        minibatch_size = 20
+        alpha_sampling = 0.75
+        learning_rate = 0.001
+        softmax_sample_size = 1000
+        clipping_threshold_per_sample = 5.0
+    elif type == 'medium':
+        hidden_dim = 650
+        num_layers = 2
+        num_epochs = 39
+        minibatch_size = 35
+        alpha_sampling = 0.75
+        learning_rate = 0.003
+        softmax_sample_size = 20
+        clipping_threshold_per_sample = 5.0
     elif type == 'large':
         hidden_dim = 1500
         num_layers = 2
         num_epochs = 55
+        minibatch_size = 35
+        alpha_sampling = 0.75
+        learning_rate = 0.001
+        softmax_sample_size = 1000
+        clipping_threshold_per_sample = 10.0
 
-
-    # training parameters
-    minibatch_size = 300
-    alpha_sampling = 0.75
-    learning_rate = 0.003
-    softmax_sample_size = 1000
+#    num_samples_between_progress_report = 250000
+    num_samples_between_progress_report = 1000
 
     training_text_file = "ptbData/ptb.train.txt"
     test_text_file = "ptbData/ptb.valid.subset.txt"
