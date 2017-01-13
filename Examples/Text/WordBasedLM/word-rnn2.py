@@ -19,6 +19,8 @@ from cntk.utils import log_number_of_parameters, ProgressPrinter
 from data_reader import *
 from math import log, exp
 
+from cntk.device import set_default_device, cpu, gpu
+
 # Creates model subgraph computing cross-entropy with sampled softmax
 def cross_entropy_with_sampled_softmax(
     hidden_vector,           # Node providing the output of the recurrent layers
@@ -283,6 +285,9 @@ if __name__=='__main__':
     # model sizes according to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
     type = 'test'
 
+     set_default_device(cpu())
+#    set_default_device(gpu(0))
+
     if type == 'test':
         hidden_dim = 650
         num_layers = 2
@@ -331,8 +336,3 @@ if __name__=='__main__':
 
     # train the LM
     train_lm(training_text_file, test_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha_sampling)
-
-    # load and sample
-    priming_text = ""
-    final_model_file = "models/lm_epoch%i.dnn" % (num_epochs-1)
-    load_and_sample(final_model_file, input_word2index_file, prime_text = priming_text, use_hardmax = False, length = 100, alpha = 1.0)
