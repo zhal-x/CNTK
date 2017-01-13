@@ -181,7 +181,7 @@ def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation
 
     # load the test data
     word_ids_test = text_file_to_word_ids(validation_text_file, word_to_ix)
-    word_ids_test = word_ids_test[0:500]
+    word_ids_test = word_ids_test[0:num_words_to_use_in_progress_print]
     average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
     print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
@@ -328,9 +328,10 @@ if __name__=='__main__':
 
 #    num_samples_between_progress_report = 250000
     num_samples_between_progress_report = 1000
+    num_words_to_use_in_progress_print = 500
 
     training_text_file = "ptbData/ptb.train.txt"
-    test_text_file = "ptbData/ptb.valid.subset.txt"
+    test_text_file = "ptbData/ptb.valid.txt"
     word2index_file = "ptbData/ptb.word2id.txt"
     sampling_weights_file = "ptbData/ptb.freq.txt"
 
