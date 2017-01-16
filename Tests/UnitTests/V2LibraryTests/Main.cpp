@@ -51,13 +51,18 @@ int main()
 
     // Note: Run the device selection tests first since later tests
     // may interfere with device selection by freezing default device
-    DeviceSelectionTests();
+    //DeviceSelectionTests();
+    //
+    //NDArrayViewTests();
+    //ValueTests();
+    //TensorTests();
+    //FunctionTests();
+    //BlockTests();
+    //
+    //FeedForwardTests();
+    //RecurrentFunctionTests();
 
-    NDArrayViewTests();
-    ValueTests();
-    TensorTests();
-    FunctionTests();
-    BlockTests();
+    //UserDefinedFunctionTests();
 
     FeedForwardTests();
     RecurrentFunctionTests();
@@ -76,8 +81,8 @@ int main()
     TrainTruncatedLSTMAcousticModelClassifer();
 
     MinibatchSourceTests();
-
-    MultiThreadsEvaluation(IsGPUAvailable());
+    //
+    //MultiThreadsEvaluation(IsGPUAvailable());
 
     fprintf(stderr, "\nCNTKv2Library tests: Passed\n");
     fflush(stderr);
