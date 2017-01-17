@@ -547,6 +547,12 @@ int wmainWithBS(int argc, wchar_t* argv[]) // called from wmain which is a wrapp
         Globals::ForceConstantRandomSeed();
 
 #ifndef CPUONLY
+    // Initialize list of devices for CNTKv2Library.
+    // TODO: BestDevice function should be shared between v2 and v1 as dll,
+    // not as static lib => this causes problems of double initialization.
+    ::CNTK::DeviceDescriptor::DefaultDevice();
+    ::CNTK::DeviceDescriptor::AllDevices();
+
     auto valpp = config.Find(L"deviceId");
     if (valpp)
     {
@@ -689,6 +695,12 @@ int wmainOldCNTKConfig(int argc, wchar_t* argv[])
     int traceLevel = config(L"traceLevel", 0);
 
 #ifndef CPUONLY
+    // Initialize list of devices for CNTKv2Library.
+    // TODO: BestDevice function should be shared between v2 and v1 as dll,
+    // not as static lib => this causes problems of double initialization.
+    ::CNTK::DeviceDescriptor::DefaultDevice();
+    ::CNTK::DeviceDescriptor::AllDevices();
+
     ConfigValue val = config("deviceId", "auto");
     if (!EqualCI(val, "cpu") && !EqualCI(val, "auto"))
     {
