@@ -400,7 +400,7 @@ void TestSplice(size_t numInputs, size_t maxNumInputAxes, size_t spliceAxis, con
         transposeInputFuncs[i] = TransposeAxes(inputVars[i], Axis(0), Axis((int)spliceAxis));
         transposedInputs[i] = transposeInputFuncs[i];
     }
-    
+
     auto spliceTransposedFunc = Splice(transposedInputs, Axis(0));
     spliceUsingTransposeFunc = TransposeAxes(spliceTransposedFunc, Axis(0), Axis((int)spliceAxis));
     std::unordered_map<Variable, ValuePtr> spliceUsingTransposeOutputs = { { spliceUsingTransposeFunc->Output(), nullptr } };
@@ -458,7 +458,7 @@ void TestSplice()
 void TestTimesNodeShapeInference()
 {
     auto timesNodeShapeInferenceTest = [](size_t inputRank, size_t outputRank, int inputRankToMap) {
-        
+
         auto device = DeviceDescriptor::CPUDevice();
 
         size_t maxDimSize = 15;
@@ -528,7 +528,7 @@ void TestChangingParameterValues(size_t rank, const DeviceDescriptor& device)
 
     auto param = Parameter(shape, AsDataType<ElementType>(), GlorotUniformInitializer(), device);
     auto plus = Plus(param, param);
-    
+
 
     std::vector<ElementType> outputData(numElements);
     ValuePtr outputValue = MakeSharedObject<Value>(MakeSharedObject<NDArrayView>(shape, outputData, false));
@@ -539,9 +539,9 @@ void TestChangingParameterValues(size_t rank, const DeviceDescriptor& device)
     NDArrayViewPtr cpuView;
     auto getParameterData = [&cpuView](const Parameter& p) -> const ElementType*
     {
-          cpuView = (p.Value()->Device() != DeviceDescriptor::CPUDevice()) ?
-                     p.Value()->DeepClone(DeviceDescriptor::CPUDevice()) : p.Value();
-          return cpuView->DataBuffer<ElementType>();
+        cpuView = (p.Value()->Device() != DeviceDescriptor::CPUDevice()) ?
+        p.Value()->DeepClone(DeviceDescriptor::CPUDevice()) : p.Value();
+        return cpuView->DataBuffer<ElementType>();
     };
 
     auto parameterData = getParameterData(param);
@@ -590,9 +590,9 @@ void TestChangingParameterValues(size_t rank, const DeviceDescriptor& device)
     for (int i = 0; i < numElements; i++)
     {
         auto denom = (i + ElementType(1.0));
-        FloatingPointCompare<ElementType>(parameterData[i], ElementType(1.0) / denom, 
+        FloatingPointCompare<ElementType>(parameterData[i], ElementType(1.0) / denom,
                                           "Parameter valued does not match the expected value.");
-        FloatingPointCompare<ElementType>(outputData[i], ElementType(2.0) / denom, 
+        FloatingPointCompare<ElementType>(outputData[i], ElementType(2.0) / denom,
                                           "Function output does not match the expected value.");
     }
 }
@@ -773,8 +773,8 @@ void TestOuputVariableName(const DeviceDescriptor& device)
     // Check the output variable has correct shape size.
     if (output->Output().Shape().TotalSize() != outputDim)
         ReportFailure("The output variable does not have expected shape size. exptected = %ld, actual = %ld\n",
-        static_cast<unsigned long>(outputDim),
-        static_cast<unsigned long>(output->Output().Shape().TotalSize()));
+            static_cast<unsigned long>(outputDim),
+            static_cast<unsigned long>(output->Output().Shape().TotalSize()));
 }
 
 void CheckFindByNameResult(FunctionPtr actual, FunctionPtr expected)
@@ -957,11 +957,12 @@ BOOST_AUTO_TEST_CASE(Splice)
 BOOST_AUTO_TEST_CASE(ChangingParameterValuesInCPU)
 {
     TestChangingParameterValues<float>(2, DeviceDescriptor::CPUDevice());
-        TestChangingParameterValues<double>(3, DeviceDescriptor::CPUDevice());
+    TestChangingParameterValues<double>(3, DeviceDescriptor::CPUDevice());
 }
 
-BOOST_AUTO_TEST_CASE(ChangingParameterValuesInGPU, *boost::unit_test::precondition(GpuAvailable))
+BOOST_AUTO_TEST_CASE(ChangingParameterValuesInGPU)
 {
+    if (IsGPUAvailable())
     TestChangingParameterValues<double>(3, DeviceDescriptor::GPUDevice(0));
 }
 
@@ -980,9 +981,10 @@ BOOST_AUTO_TEST_CASE(SliceInCPU)
     TestSlice(2, DeviceDescriptor::CPUDevice());
 }
 
-BOOST_AUTO_TEST_CASE(SliceInGPU, *boost::unit_test::precondition(GpuAvailable))
+BOOST_AUTO_TEST_CASE(SliceInGPU)
 {
-        TestSlice(1, DeviceDescriptor::GPUDevice(0));
+    if (IsGPUAvailable())
+    TestSlice(1, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(ReduceSumInCPU)
@@ -990,9 +992,10 @@ BOOST_AUTO_TEST_CASE(ReduceSumInCPU)
     TestReduceSum(1, DeviceDescriptor::CPUDevice());
 }
 
-BOOST_AUTO_TEST_CASE(ReduceSumInGPU, *boost::unit_test::precondition(GpuAvailable))
+BOOST_AUTO_TEST_CASE(ReduceSumInGPU)
 {
-        TestReduceSum(2, DeviceDescriptor::GPUDevice(0));
+    if (IsGPUAvailable())
+    TestReduceSum(2, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(RecurrentFunctionCloning)
@@ -1005,9 +1008,10 @@ BOOST_AUTO_TEST_CASE(TransposeInCPU)
     TestTranspose(2, 0, 1, DeviceDescriptor::CPUDevice());
 }
 
-BOOST_AUTO_TEST_CASE(TransposeInGPU, *boost::unit_test::precondition(GpuAvailable))
+BOOST_AUTO_TEST_CASE(TransposeInGPU)
 {
-        TestTranspose(3, 1, 2, DeviceDescriptor::GPUDevice(0));
+    if (IsGPUAvailable())
+    TestTranspose(3, 1, 2, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(OutputVariableNameInCPU)
