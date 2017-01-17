@@ -12,7 +12,7 @@
 using namespace CNTK;
 using namespace std;
 
-namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
+namespace CNTK { namespace Test {
 
 void CheckMask(const ValuePtr testValue, const vector<size_t>& seqLenList, const vector<bool>& seqStartFlags)
 {
@@ -1119,4 +1119,4 @@ BOOST_AUTO_TEST_CASE(ValueCopyToExceptions)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}}}}
+}}
