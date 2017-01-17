@@ -22,22 +22,63 @@ from math import log, exp
 from cntk.device import set_default_device, cpu, gpu
 
 # Creates model subgraph computing cross-entropy with sampled softmax
-def cross_entropy_with_sampled_softmax(
+def cross_entropy_with_full_softmax(
     hidden_vector,           # Node providing the output of the recurrent layers
     target_vector,           # Node providing the expected labels (as sparse vectors)
-    num_samples,             # Number of samples to use for sampled softmax
-    sampling_weights,        # Node providing weights to be used for the weighted sampling
     vocab_dim,               # Vocabulary size
     hidden_dim,              # Row-dimension of the hidden vector
     allow_duplicates = False # Boolean flag to control wheather to use sampling with replacemement (allow_duplicates == True) or without replacement.
     ):
     bias = C.Parameter(shape = (vocab_dim, 1), init = C.init_bias_default_or_0, name='B')
     weights = C.Parameter(shape = (vocab_dim, hidden_dim), init = C.init_default_or_glorot_uniform, name='E')
-    sample_selector = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
+
+    z = C.times_transpose(weights, hidden_vector) + bias
+
+    zSReduced = C.reduce_log_sum(z)
+    zT = C.times(target_vector, z)
+
+    # Compute the cross entropy that is used for training.
+    cross_entropy_on_samples = zSReduced - zT
+    print("hidden_vector.shape="+str(hidden_vector.shape))
+    print("weights.shape="+str(weights.shape))
+    print("bias.shape="+str(bias.shape))
+    print("z.shape=" + str(z.shape))
+    print("zT.shape="+str(zT.shape))
+    print("cross_entropy_on_samples.shape="+str(cross_entropy_on_samples.shape))
+
+    zSMax = C.reduce_max(z)
+    error_on_samples = C.less(zT, zSMax)
+    return (z, cross_entropy_on_samples, error_on_samples)
+
+
+# Creates model subgraph computing cross-entropy with sampled softmax
+def cross_entropy_with_sampled_softmax(
+    hidden_vector,           # Node providing the output of the recurrent layers
+    target_vector,           # Node providing the expected labels (as sparse vectors)
+    vocab_dim,               # Vocabulary size
+    hidden_dim,              # Row-dimension of the hidden vector
+    num_samples,             # Number of samples to use for sampled softmax
+    sampling_weights,        # Node providing weights to be used for the weighted sampling
+    allow_duplicates = False # Boolean flag to control wheather to use sampling with replacemement (allow_duplicates == True) or without replacement.
+    ):
+    bias = C.Parameter(shape = (vocab_dim, 1), init = C.init_bias_default_or_0, name='B')
+    weights = C.Parameter(shape = (vocab_dim, hidden_dim), init = C.init_default_or_glorot_uniform, name='E')
+
+    if use_sparse:
+        sample_selector = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
+    else:
+        # using dense data --> have to convert the sparse matrix returned from random sample to dense by multiplying it with a dense unit matrix
+        sample_selector_sparse = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
+        I = C.Constant(np.eye(vocab_dim, dtype=np.float32))
+        sample_selector = C.times(sample_selector_sparse, I)
+
     inclusion_probs = C.random_sample_inclusion_frequency(sampling_weights, num_samples, allow_duplicates) # dense row [1 * vocab_size]
     log_prior = C.log(inclusion_probs) # dense row [1 * vocab_dim]
 
+
+    print("hidden_vector: "+str(hidden_vector.shape))
     wS = C.times(sample_selector, weights, name='wS') # [num_samples * hidden_dim]
+    print("ws:"+str(wS.shape))
     zS = C.times_transpose(wS, hidden_vector, name='zS1') + C.times(sample_selector, bias, name='zS2') - C.times_transpose (sample_selector, log_prior, name='zS3')# [num_samples]
 
     # Getting the weight vector for the true label. Dimension hidden_dim
@@ -47,7 +88,7 @@ def cross_entropy_with_sampled_softmax(
     zSReduced = C.reduce_log_sum(zS)
 
     # Compute the cross entropy that is used for training.
-    cross_entropy_on_samples = zSReduced - zT
+    cross_entropy_on_samples = C.log_add_exp(zT, zSReduced) - zT
 
     # For applying the model we also output a node providing the input for the full softmax
     z = C.times_transpose(weights, hidden_vector) + bias
@@ -56,6 +97,28 @@ def cross_entropy_with_sampled_softmax(
     zSMax = C.reduce_max(zS)
     error_on_samples = C.less(zT, zSMax)
     return (z, cross_entropy_on_samples, error_on_samples)
+
+def create_model(input_sequence, label_sequence, vocab_dim, hidden_dim):
+    # create the node creating the latent vector
+    latent_vector_node = Sequential([
+         C.Embedding(hidden_dim),      
+        LayerStack(num_layers, lambda: 
+                   Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
+        ])
+
+    
+    # and apply it to the input sequence    
+    latent_vector = latent_vector_node(input_sequence)
+
+    if use_full_softmax:
+        softmax_input, ce, errs = ce_full_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim)
+    else:
+        weights = load_sampling_weights(sampling_weights_file)
+        smoothed_weights = np.float32( np.power(weights, alpha))
+        sampling_weights = C.reshape(C.Constant(smoothed_weights), shape = (1,vocab_dim))
+        softmax_input, ce, errs = cross_entropy_with_sampled_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim, softmax_sample_size, sampling_weights)
+
+    return softmax_input, ce, errs
 
 # Computes exp(z[index])/np.sum(exp[z]) for a one-dimensional numpy array in an numerically stable way.
 def log_softmax(z,    # numpy array
@@ -152,24 +215,27 @@ def sample(
     # return output
     return ' '.join([ix_to_word[id] for id in output])
 
+def ce_full_softmax(latent_vector, labels, output_dim, hidden_dim):
+    bias = C.Parameter(shape = (output_dim, 1), init = C.init_bias_default_or_0, name='B')
+    weights = C.Parameter(shape = (output_dim, hidden_dim), init = C.init_default_or_glorot_uniform, name='E')
 
-# Define the model to train
-def create_model():
-    
-    return Sequential([        
-        C.Embedding(hidden_dim),
-        LayerStack(num_layers, lambda: 
-                   Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
-    ])
+    z = C.reshape( C.times_transpose(weights, latent_vector) + bias, (1,output_dim))
+    zT = C.times_transpose(z, labels)
+    ce = C.reduce_log_sum(z) - zT
+    zMax = C.reduce_max(z)
+    error_on_samples = C.less(zT, zMax)
+    return (z, ce, error_on_samples)
+
 
 # Creates model inputs
-def create_inputs(vocab_dim):
+def create_inputs(vocab_dim, asSparse):
     batch_axis = Axis.default_batch_axis()
     input_seq_axis = Axis('inputAxis')
 
     input_dynamic_axes = [batch_axis, input_seq_axis]
-    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes, is_sparse = True)
-    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes, is_sparse = True)
+
+    input_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes, is_sparse = use_sparse)
+    label_sequence = input_variable(shape=vocab_dim, dynamic_axes=input_dynamic_axes, is_sparse = use_sparse)
     
     return input_sequence, label_sequence
 
@@ -185,6 +251,8 @@ def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation
     average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
     print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
+
+
 # Creates and trains a rnn the language model using sampled softmax as training criterion.
 def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha):
 
@@ -193,20 +261,11 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
     
 
     # Model the source and target inputs to the model
-    input_sequence, label_sequence = create_inputs(vocab_dim)
+    input_sequence, label_sequence = create_inputs(vocab_dim, False)
 
-    # create the model
-    rnn = create_model()
+    # create the node creating the latent vector
+    softmax_input, ce, errs = create_model(input_sequence, label_sequence, vocab_dim, hidden_dim)
     
-    # and apply it to the input sequence
-    z = rnn(input_sequence)
-
-    # setup the criterions (loss and metric)
-    weights = load_sampling_weights(sampling_weights_file_path)
-    smoothed_weights = np.float32( np.power(weights, alpha))
-    sampling_weights = C.reshape(C.Constant(smoothed_weights), shape = (1,vocab_dim))
-    model, ce, error_on_samples = cross_entropy_with_sampled_softmax(z, label_sequence, softmax_sample_size, sampling_weights, vocab_dim, hidden_dim)
-
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
@@ -214,13 +273,13 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
     learner = momentum_sgd(ce.parameters, lr_per_sample, momentum_time_constant, 
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-    trainer = Trainer(model, ce, error_on_samples, learner)
+    trainer = Trainer(softmax_input, ce, errs, learner)
 
     minibatches_per_epoch = int((data_size / minibatch_size))
     total_num_minibatches = total_num_epochs * minibatches_per_epoch
     
     # print out some useful training information
-    log_number_of_parameters(model) ; print()
+    log_number_of_parameters(ce) ; print()
     progress_printer = ProgressPrinter(freq=1, tag='Training')
     
     epoche_count = 0
@@ -234,7 +293,7 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
             num_trained_samples_within_current_epoche = 0
             epoche_count += 1
             model_filename = "models/lm_epoch%d.dnn" % epoche_count
-            model.save_model(model_filename)
+            softmax_input.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
         # get the datafor next batch
@@ -251,7 +310,7 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
         samples_per_second = minibatch_size / (t_end - t_start)
 
         if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
-            print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
+            print_progress(samples_per_second, softmax_input, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
             num_trained_samples_since_last_report = 0
 
         num_trained_samples += minibatch_size
@@ -285,15 +344,13 @@ if __name__=='__main__':
     # model sizes according to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
     type = 'medium'
 
-#    set_default_device(cpu()) # this version seem to work fine
-    set_default_device(gpu(0)) # this verversion gives nan results
 
     if type == 'test':
-        hidden_dim = 650
+        hidden_dim = 10
         num_layers = 2
-        num_epochs = 39
-        minibatch_size = 35
-        alpha_sampling = 0.75
+        num_epochs = 150
+        minibatch_size = 20
+        alpha = 0.75
         learning_rate = 0.003
         softmax_sample_size = 1000
         clipping_threshold_per_sample = 5.0
@@ -301,10 +358,10 @@ if __name__=='__main__':
     elif type == 'small':
         hidden_dim = 200
         num_layers = 2
-        num_epochs = 13
+        num_epochs = 150
         minibatch_size = 20
-        alpha_sampling = 0.75
-        learning_rate = 0.001
+        alpha = 0.75
+        learning_rate = 0.003
         softmax_sample_size = 1000
         clipping_threshold_per_sample = 5.0
     elif type == 'medium':
@@ -312,7 +369,7 @@ if __name__=='__main__':
         num_layers = 2
         num_epochs = 39
         minibatch_size = 35
-        alpha_sampling = 0.75
+        alpha = 0.75
         learning_rate = 0.003
         softmax_sample_size = 20
         clipping_threshold_per_sample = 5.0
@@ -321,19 +378,28 @@ if __name__=='__main__':
         num_layers = 2
         num_epochs = 55
         minibatch_size = 35
-        alpha_sampling = 0.75
+        alpha = 0.75
         learning_rate = 0.001
         softmax_sample_size = 1000
         clipping_threshold_per_sample = 10.0
 
-#    num_samples_between_progress_report = 250000
     num_samples_between_progress_report = 1000
     num_words_to_use_in_progress_print = 500
+
+    use_full_softmax = False
+    use_sparse = True
+
+    #    set_default_device(cpu()) # this version seem to work fine
+    set_default_device(gpu(0)) # this verversion gives nan results
+
+    import _cntk_py
+    #_cntk_py.disable_gradient_accumulation_optimization()
 
     training_text_file = "ptbData/ptb.train.txt"
     test_text_file = "ptbData/ptb.valid.txt"
     word2index_file = "ptbData/ptb.word2id.txt"
     sampling_weights_file = "ptbData/ptb.freq.txt"
 
+
     # train the LM
-    train_lm(training_text_file, test_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha_sampling)
+    train_lm(training_text_file, test_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha)
