@@ -2,6 +2,7 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
 //
+#include "stdafx.h"
 #include <vector>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -10,6 +11,8 @@
 
 using namespace CNTK;
 using namespace std;
+
+namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
 
 void CheckMask(const ValuePtr testValue, const vector<size_t>& seqLenList, const vector<bool>& seqStartFlags)
 {
@@ -70,23 +73,22 @@ void CheckValue(const ValuePtr testValue, const NDShape& sampleShape, const vect
 {
     size_t sampleSize = sampleShape.TotalSize();
     // Check parameters
-    if (expectedData.size() != seqLenList.size())
-    {
-        ReportFailure("Parameter error: the sequence number in the exepected data and sequence list does not match.");
-    }
+    BOOST_TEST(expectedData.size() == seqLenList.size(), "Parameter error: the sequence number in the exepected data and sequence list does not match.");
     for (size_t i = 0; i < expectedData.size(); i++)
     {
         if (expectedData[i].size() != seqLenList[i] * sampleSize)
         {
-            ReportFailure("Parameter erroe: the number of data for sequence %" PRIu64 " in the expected data does not match. Expected: %" PRIu64 ", actual: %" PRIu64 ".", i, seqLenList[i] * sampleSize, expectedData[i].size());
+            ReportFailure("Parameter erroe: the number of data for sequence %" PRIu64 " in the expected data does not match. Expected: %" PRIu64 ", actual: %" PRIu64 ".",
+                          i, seqLenList[i] * sampleSize, expectedData[i].size());
         }
     }
 
     // Check shape 
     auto valueRank = testValue->Shape().Rank();
     auto sampleRank = sampleShape.Rank();
-    if ((valueRank < sampleRank + 1) || (valueRank > sampleRank + 2) || (sampleShape != testValue->Shape().SubShape(0, sampleRank)))
-        ReportFailure("The Value does not have the expected shape.");
+    auto shapeIsCorrect = !((valueRank < sampleRank + 1) || (valueRank > sampleRank + 2) || (sampleShape != testValue->Shape().SubShape(0, sampleRank)));
+
+    BOOST_TEST(shapeIsCorrect, "The Value does not have the expected shape.");
 
     size_t numOfSequences;
     if (valueRank == sampleShape.Rank() + 1)
@@ -134,15 +136,13 @@ template <typename ElementType>
 void CheckValue(const ValuePtr testValue, const size_t dimension, const vector<vector<size_t>>& expectedData, const vector<size_t>& seqLenList, const vector<bool>& seqStartFlags = {})
 {
     // Check parameters
-    if (expectedData.size() != seqLenList.size())
-    {
-        ReportFailure("Parameter error: the sequence number in the exepected data and sequence list does not match.");
-    }
+    BOOST_TEST(expectedData.size() == seqLenList.size(), "Parameter error: the sequence number in the exepected data and sequence list does not match.");
     for (size_t i = 0; i < expectedData.size(); i++)
     {
         if (expectedData[i].size() != seqLenList[i])
         {
-            ReportFailure("Parameter erroe: the number of data for sequence %" PRIu64 " in the expected data does not match. Expected: %" PRIu64 ", actual: %" PRIu64 ".", i, seqLenList[i], expectedData[i].size());
+            ReportFailure("Parameter erroe: the number of data for sequence %" PRIu64 " in the expected data does not match. Expected: %" PRIu64 ", actual: %" PRIu64 ".",
+                i, seqLenList[i], expectedData[i].size());
         }
     }
 
@@ -686,23 +686,20 @@ void TestSettingParameterValuesManually(const DeviceDescriptor& device)
     assert(!AreEqual(v1_1, v1_2) && !AreEqual(p1.Value(), v1_2));
 
     p1.SetValue(v1_2);
-    if (!AreEqual(p1.Value(), v1_2))
-        throw std::runtime_error("Parameter value does match the expected value.");
+    BOOST_TEST(AreEqual(p1.Value(), v1_2), "Parameter value does match the expected value.");
 
-    Parameter p2(CNTK::NDArrayView::RandomUniform<float>({ 10 }, -0.05, 0.05, 1, device));
-    auto v2 = CNTK::NDArrayView::RandomUniform<float>({ 10 }, -0.05, 0.05, 2, device);
+    Parameter p2(NDArrayView::RandomUniform<float>({ 10 }, -0.05, 0.05, 1, device));
+    auto v2 = NDArrayView::RandomUniform<float>({ 10 }, -0.05, 0.05, 2, device);
     assert(!AreEqual(p2.Value(), v2));
 
     p2.SetValue(v2);
-    if (!AreEqual(p2.Value(), v2))
-        throw std::runtime_error("Parameter value does match the expected value.");
+    BOOST_TEST(AreEqual(p2.Value(), v2), "Parameter value does match the expected value.");
 
     Parameter p3(NDShape({ 3, 4 }), DataType::Float, GlorotUniformInitializer(), device, L"p3");
-    auto v3 = CNTK::NDArrayView::RandomUniform<float>({ 3, 4 }, -1, 1, 3, device);
+    auto v3 = NDArrayView::RandomUniform<float>({ 3, 4 }, -1, 1, 3, device);
 
     p3.SetValue(v3);
-    if (!AreEqual(p3.Value(), v3))
-        throw std::runtime_error("Parameter value does match the expected value.");
+    BOOST_TEST(AreEqual(p3.Value(), v3), "Parameter value does match the expected value.");
 
     Parameter p4({ 1 }, DataType::Double, Dictionary(), device, L"p4");
     auto v4 = MakeSharedObject<NDArrayView>(1.0, NDShape{ 1 }, device);
@@ -710,8 +707,7 @@ void TestSettingParameterValuesManually(const DeviceDescriptor& device)
     // Since p4 initializer is an empty dictionary, lazy-initialization (triggered by the value getter: p4.Value())
     // should fail. However, the setter will override the bogus initializer and init p4 by copying v4 content.
     p4.SetValue(v4);
-    if (!AreEqual(p4.Value(), v4))
-        throw std::runtime_error("Parameter value does match the expected value.");
+    BOOST_TEST(AreEqual(p4.Value(), v4), "Parameter value does match the expected value.");
 }
 
 void SparseSequenceBatchValueCreationTest(size_t vocabSize, size_t maxAllowedSequenceLength, const DeviceDescriptor& device)
@@ -730,8 +726,7 @@ void SparseSequenceBatchValueCreationTest(size_t vocabSize, size_t maxAllowedSeq
     sparseSequenceBatchDataConvertedToDense->CopyFrom(*sparseSequenceBatch->Data());
     auto sparseSequenceBatchValueConvertedToDense = MakeSharedObject<Value>(sparseSequenceBatchDataConvertedToDense, sparseSequenceBatch->Mask());
 
-    if (!Internal::AreEqual(*denseSequenceBatch, *sparseSequenceBatchValueConvertedToDense))
-        ReportFailure("Sparse sequence batch does not match expectation");
+    BOOST_TEST(Internal::AreEqual(*denseSequenceBatch, *sparseSequenceBatchValueConvertedToDense), "Sparse sequence batch does not match expectation");
 }
 
 template <typename ElementType>
@@ -987,77 +982,119 @@ void CreateBatchOfSequencesTestOneHot(const DeviceDescriptor device, bool readOn
     }
 }
 
-
-void ValueTests()
+struct ValueFixture
 {
-    fprintf(stderr, "\nValueTests..\n");
+    ValueFixture()
+    {
     srand(1);
+    }
+};
 
+BOOST_FIXTURE_TEST_SUITE(ValueSuite, ValueFixture)
+
+BOOST_AUTO_TEST_CASE(SettingParameterValuesManuallyInCPU)
+{
     TestSettingParameterValuesManually(DeviceDescriptor::CPUDevice());
+}
 
+
+BOOST_AUTO_TEST_CASE(ValueCreationWithoutNDMaskInCPU)
+{
     ValueCreationNoNDMaskTest<float>(DeviceDescriptor::CPUDevice(), false);
     ValueCreationNoNDMaskTest<double>(DeviceDescriptor::CPUDevice(), true);
+}
+
+BOOST_AUTO_TEST_CASE(ValueCreationWithNDMaskInCPU)
+{
     ValueCreationWithNDMaskTest<double>(DeviceDescriptor::CPUDevice(), false);
     ValueCreationWithNDMaskTest<float>(DeviceDescriptor::CPUDevice(), true);
+}
+
+BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithoutNDMaskInCPU)
+{
     ValueCreationOneHotNoNDMaskTest<float>(DeviceDescriptor::CPUDevice(), false);
     ValueCreationOneHotNoNDMaskTest<double>(DeviceDescriptor::CPUDevice(), true);
+}
+
+BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithNDMaskInCPU)
+{
     ValueCreationOneHotWithNDMaskTest<double>(DeviceDescriptor::CPUDevice(), false);
     ValueCreationOneHotWithNDMaskTest<float>(DeviceDescriptor::CPUDevice(), true);
+}
 
+BOOST_AUTO_TEST_CASE(SparseSequenceBatchValueCreationInCPU)
+{
     SparseSequenceBatchValueCreationTest(300, 7, DeviceDescriptor::CPUDevice());
     SparseSequenceBatchValueCreationTest(2300, 1, DeviceDescriptor::CPUDevice());
+}
 
+BOOST_AUTO_TEST_CASE(ValueCopyToDenseInCPU)
+{
     ValueCopyToDenseTest<float>(DeviceDescriptor::CPUDevice());
     ValueCopyToDenseTest<double>(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_CASE(ValueCopyToOneHotTestInCPU)
+{
     ValueCopyToOneHotTest<float>(DeviceDescriptor::CPUDevice());
     ValueCopyToOneHotTest<double>(DeviceDescriptor::CPUDevice());
-    ValueCopyToExceptionsTest(DeviceDescriptor::CPUDevice());
+}
 
-    CreateBatchTestDense<float>(DeviceDescriptor::CPUDevice(), true);
-    CreateBatchTestDense<double>(DeviceDescriptor::CPUDevice(), false);
-    CreateSequenceTestDense<float>(DeviceDescriptor::CPUDevice(), true);
-    CreateSequenceTestDense<double>(DeviceDescriptor::CPUDevice(), false);
-    CreateBatchOfSequencesTestDense<float>(DeviceDescriptor::CPUDevice(), true);
-    CreateBatchOfSequencesTestDense<double>(DeviceDescriptor::CPUDevice(), false);
-    CreateBatchTestOneHot<float>(DeviceDescriptor::CPUDevice(), true);
-    CreateBatchTestOneHot<double>(DeviceDescriptor::CPUDevice(), false);
-    CreateSequenceTestOneHot<float>(DeviceDescriptor::CPUDevice(), true);
-    CreateSequenceTestOneHot<double>(DeviceDescriptor::CPUDevice(), false);
-    CreateBatchOfSequencesTestOneHot<float>(DeviceDescriptor::CPUDevice(), true);
-    CreateBatchOfSequencesTestOneHot<double>(DeviceDescriptor::CPUDevice(), false);
-
-    if (IsGPUAvailable())
+BOOST_AUTO_TEST_CASE(SettingParameterValuesManuallyInGPU, *boost::unit_test::precondition(GpuAvailable))
     {
         TestSettingParameterValuesManually(DeviceDescriptor::GPUDevice(0));
+}
 
+BOOST_AUTO_TEST_CASE(ValueCreationWithNDMaskInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
+    ValueCreationWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
+    ValueCreationWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
+
+}
+
+BOOST_AUTO_TEST_CASE(ValueCreationWithoutNDMaskInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
         ValueCreationNoNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), false);
         ValueCreationNoNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), true);
-        ValueCreationWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
-        ValueCreationWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
+
+}
+
+BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithoutNDMaskInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
         ValueCreationOneHotNoNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), false);
         ValueCreationOneHotNoNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), true);
+
+}
+
+BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithNDMaskInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
         ValueCreationOneHotWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
         ValueCreationOneHotWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
+}
 
+BOOST_AUTO_TEST_CASE(SparseSequenceBatchValueCreationInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
         SparseSequenceBatchValueCreationTest(50000, 1, DeviceDescriptor::GPUDevice(0));
         SparseSequenceBatchValueCreationTest(6000, 6, DeviceDescriptor::GPUDevice(0));
+}
 
+BOOST_AUTO_TEST_CASE(ValueCopyToDenseInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
         ValueCopyToDenseTest<float>(DeviceDescriptor::GPUDevice(0));
         ValueCopyToDenseTest<double>(DeviceDescriptor::GPUDevice(0));
-        ValueCopyToOneHotTest<float>(DeviceDescriptor::GPUDevice(0));
-        ValueCopyToExceptionsTest(DeviceDescriptor::GPUDevice(0));
-
-        CreateBatchTestDense<float>(DeviceDescriptor::GPUDevice(0), false);
-        CreateBatchTestDense<double>(DeviceDescriptor::GPUDevice(0), true);
-        CreateSequenceTestDense<float>(DeviceDescriptor::GPUDevice(0), false);
-        CreateSequenceTestDense<double>(DeviceDescriptor::GPUDevice(0), true);
-        CreateBatchOfSequencesTestDense<float>(DeviceDescriptor::GPUDevice(0), false);
-        CreateBatchOfSequencesTestDense<double>(DeviceDescriptor::GPUDevice(0), true);
-        CreateBatchTestOneHot<float>(DeviceDescriptor::GPUDevice(0), false);
-        CreateBatchTestOneHot<double>(DeviceDescriptor::GPUDevice(0), true);
-        CreateSequenceTestOneHot<float>(DeviceDescriptor::GPUDevice(0), false);
-        CreateSequenceTestOneHot<double>(DeviceDescriptor::GPUDevice(0), true);
-        CreateBatchOfSequencesTestOneHot<float>(DeviceDescriptor::GPUDevice(0), false);
-        CreateBatchOfSequencesTestOneHot<double>(DeviceDescriptor::GPUDevice(0), true);
-    }
 }
+
+BOOST_AUTO_TEST_CASE(ValueCopyToOneHotInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
+        ValueCopyToOneHotTest<float>(DeviceDescriptor::GPUDevice(0));
+        ValueCopyToOneHotTest<double>(DeviceDescriptor::GPUDevice(0));
+    }
+
+BOOST_AUTO_TEST_CASE(ValueCopyToExceptions)
+{
+    ValueCopyToExceptionsTest(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+}}}}

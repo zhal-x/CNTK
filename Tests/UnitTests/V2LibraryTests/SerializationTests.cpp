@@ -3,6 +3,7 @@
 // Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
 //
 
+#include "stdafx.h"
 #include <boost/random/uniform_real_distribution.hpp>
 #include "CNTKLibrary.h"
 #include "PrimitiveOpType.h"
@@ -15,11 +16,12 @@
 
 using namespace CNTK;
 using namespace std;
-using namespace Microsoft::MSR::CNTK;
 
 static const size_t maxNDShapeSize = 10;
 static const size_t maxNumAxes = 3;
 static const size_t maxDimSize = 5;
+
+namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
 
 static size_t keyCounter = 0;
 static boost::random::uniform_real_distribution<double> double_dist = boost::random::uniform_real_distribution<double>();
@@ -133,14 +135,16 @@ DictionaryValue CreateDictionaryValue(DictionaryValue::Type type, size_t maxSize
     case DictionaryValue::Type::NDArrayView:
         return DictionaryValue(*(CreateNDArrayView()));
     default:
-        NOT_IMPLEMENTED;
+        fprintf(stderr, "Inside File: %s  Line: %d  Function: %s  -> Feature Not Implemented.\n", __FILE__, __LINE__, __FUNCTION__);
+        ReportFailure("Inside File: %s  Line: %d  Function: %s  -> Feature Not Implemented.\n", __FILE__, __LINE__, __FUNCTION__);
+        return 0;
     }
 }
 
 void TestDictionarySerialization(size_t dictSize) 
 {
     if ((_wunlink(tempFilePath.c_str()) != 0) && (errno != ENOENT))
-       throw std::runtime_error("Error deleting temporary test file 'serialization.tmp'.");
+       BOOST_ERROR("Error deleting temporary test file 'serialization.tmp'.");
 
     Dictionary originalDict = CreateDictionary(dictSize, dictSize);
     {
@@ -158,35 +162,35 @@ void TestDictionarySerialization(size_t dictSize)
     }
     
     if (originalDict != deserializedDict1)
-        throw std::runtime_error("TestDictionarySerialization: original and deserialized dictionaries are not identical.");
+        BOOST_ERROR("TestDictionarySerialization: original and deserialized dictionaries are not identical.");
 
     originalDict.Save(tempFilePath);
     Dictionary deserializedDict2 = Dictionary::Load(tempFilePath);
 
      if (originalDict != deserializedDict2)
-        throw std::runtime_error("TestDictionarySerialization: original and deserialized dictionaries are not identical.");
+        BOOST_ERROR("TestDictionarySerialization: original and deserialized dictionaries are not identical.");
 }
 
 template <typename ElementType>
 void TestLargeValueSerialization(size_t numElements) 
 {
     if ((_wunlink(tempFilePath.c_str()) != 0) && (errno != ENOENT))
-      throw std::runtime_error("Error deleting temporary test file 'serialization.tmp'.");
+      BOOST_ERROR("Error deleting temporary test file 'serialization.tmp'.");
 
-    DictionaryValue originalValue(*NDArrayView::RandomUniform<ElementType>({ numElements }, -0.5, 0.5, CNTK::SentinelValueForAutoSelectRandomSeed, DeviceDescriptor::CPUDevice()));
+    DictionaryValue originalValue(*NDArrayView::RandomUniform<ElementType>({ numElements }, -0.5, 0.5, SentinelValueForAutoSelectRandomSeed, DeviceDescriptor::CPUDevice()));
     originalValue.Save(tempFilePath);
 
     DictionaryValue deserializedValue = DictionaryValue::Load(tempFilePath);
 
     if (originalValue != deserializedValue)
-        throw std::runtime_error("TestLargeValueSerialization: original and deserialized values are not identical.");
+        BOOST_ERROR("TestLargeValueSerialization: original and deserialized values are not identical.");
 }
 
 template <typename ElementType>
 void TestLearnerSerialization(int numParameters, const DeviceDescriptor& device) 
 {
     if ((_wunlink(tempFilePath.c_str()) != 0) && (errno != ENOENT))
-       throw std::runtime_error("Error deleting temporary test file 'serialization.tmp'.");
+       BOOST_ERROR("Error deleting temporary test file 'serialization.tmp'.");
 
     NDShape shape = CreateShape(5, maxDimSize);
 
@@ -235,7 +239,7 @@ void TestLearnerSerialization(int numParameters, const DeviceDescriptor& device)
      auto checkpoint2 = learner2->CreateCheckpoint();
     
     if (checkpoint1 != checkpoint2)
-        throw std::runtime_error("TestLearnerSerialization: original and restored from a checkpoint learners diverge.");
+        BOOST_ERROR("TestLearnerSerialization: original and restored from a checkpoint learners diverge.");
 }
 
 
@@ -247,7 +251,6 @@ void CheckEnumValuesNotModified() {
 
     // The following list of asserts is APPEND ONLY. DO NOT CHANGE existing assert statements.
 
-    
     static_assert(static_cast<size_t>(DataType::Unknown) == 0 &&
                   static_cast<size_t>(DataType::Float) == 1 &&
                   static_cast<size_t>(DataType::Double) == 2, 
@@ -260,7 +263,6 @@ void CheckEnumValuesNotModified() {
                   static_cast<size_t>(VariableKind::Placeholder) == 4, 
                   "VariableKind enum value was modified.");
 
-    
     static_assert(static_cast<size_t>(PrimitiveOpType::Negate) == 0 &&
                   static_cast<size_t>(PrimitiveOpType::Sigmoid) == 1 &&
                   static_cast<size_t>(PrimitiveOpType::Tanh) == 2 &&
@@ -377,7 +379,7 @@ void TestFunctionSaveAndLoad(const FunctionPtr& function, const DeviceDescriptor
 
     if (!AreEqual(function, reloadedFunction))
     {
-        throw std::runtime_error("TestFunctionSaveAndLoad: original and reloaded functions are not identical.");
+        BOOST_ERROR("TestFunctionSaveAndLoad: original and reloaded functions are not identical.");
     }
 }
 
@@ -392,14 +394,14 @@ void TestFunctionsForEquality(const DeviceDescriptor& device)
     auto f2 = BuildFFClassifierNet(inputVar, 3, device, /*seed*/ 1);
     if (!AreEqual(f1, f2))
     {
-        throw std::runtime_error("TestFunctionsForEquality: two functions built with the same seed values are not identical.");
+        BOOST_ERROR("TestFunctionsForEquality: two functions built with the same seed values are not identical.");
     }
 
     auto f3 = BuildFFClassifierNet(inputVar, 3, device, /*seed*/ 2);
     auto f4 = BuildFFClassifierNet(inputVar, 3, device, /*seed*/ 3);
     if (AreEqual(f3, f4))
     {
-        throw std::runtime_error("TestFunctionsForEquality: two functions built with different seed values are identical.");
+        BOOST_ERROR("TestFunctionsForEquality: two functions built with different seed values are identical.");
     }
 }
 
@@ -419,8 +421,8 @@ TrainerPtr BuildTrainer(const FunctionPtr& function, const Variable& labels,
                      LearningRateSchedule lr = LearningRatePerSampleSchedule(0.005), 
                      MomentumSchedule m = MomentumAsTimeConstantSchedule(0.0))
 {
-    auto trainingLoss = CNTK::CrossEntropyWithSoftmax(function, labels, L"lossFunction");
-    auto prediction = CNTK::ClassificationError(function, labels, L"classificationError");
+    auto trainingLoss = CrossEntropyWithSoftmax(function, labels, L"lossFunction");
+    auto prediction = ClassificationError(function, labels, L"classificationError");
     auto learner = MomentumSGDLearner(function->Parameters(), lr, m, /*unitGainMomentum = */true);
     return CreateTrainer(function, trainingLoss, prediction, { learner });
 }
@@ -445,7 +447,7 @@ void TestFunctionSerializationDuringTraining(const FunctionPtr& function, const 
 
     if (AreEqual(classifierOutput1, classifierOutput2))
     {
-        throw std::runtime_error("TestModelSerialization: reloaded function is still identical to the original after it was trained.");
+        BOOST_ERROR("TestModelSerialization: reloaded function is still identical to the original after it was trained.");
     }
 
     for (int i = 0; i < 3; ++i)
@@ -456,7 +458,7 @@ void TestFunctionSerializationDuringTraining(const FunctionPtr& function, const 
 
         if (!AreEqual(classifierOutput1, classifierOutput3))
         {
-            throw std::runtime_error("TestModelSerialization: original and reloaded functions are not identical.");
+            BOOST_ERROR("TestModelSerialization: original and reloaded functions are not identical.");
         }
       
         auto trainer2 = BuildTrainer(classifierOutput3, labels);
@@ -524,21 +526,21 @@ void TestTrainingWithCheckpointing(const FunctionPtr& function1, const FunctionP
 
     if (!AreEqual(function1, function2))
     {
-        throw std::runtime_error("TestModelSerialization: reloaded function is not identical to the original.");
+        BOOST_ERROR("TestModelSerialization: reloaded function is not identical to the original.");
     }
 
     trainer1->TrainMinibatch({ { function1->Arguments()[0], minibatchData[featureStreamInfo] }, { labels, minibatchData[labelStreamInfo] } }, device);
 
     if (AreEqual(function1, function2))
     {
-        throw std::runtime_error("TestModelSerialization: reloaded function is still identical to the original after it was trained.");
+        BOOST_ERROR("TestModelSerialization: reloaded function is still identical to the original after it was trained.");
     }
 
     trainer2->TrainMinibatch({ { function2->Arguments()[0], minibatchData[featureStreamInfo] }, { labels, minibatchData[labelStreamInfo] } }, device);
 
     if (!AreEqual(function1, function2))
     {
-        throw std::runtime_error("TestModelSerialization: reloaded function is not identical to the original.");
+        BOOST_ERROR("TestModelSerialization: reloaded function is not identical to the original.");
     }
 
     for (int i = 0; i < 3; ++i)
@@ -548,7 +550,7 @@ void TestTrainingWithCheckpointing(const FunctionPtr& function1, const FunctionP
 
         if (!AreEqual(function1, function2))
         {
-            throw std::runtime_error("TestModelSerialization: original and reloaded functions are not identical.");
+            BOOST_ERROR("TestModelSerialization: original and reloaded functions are not identical.");
         }
       
         for (int j = 0; j < 3; ++j)
@@ -634,8 +636,8 @@ void TestLegacyModelSaving(const DeviceDescriptor& device)
     auto classifierOutput = LSTMSequenceClassiferNet(features, numOutputClasses, embeddingDim, hiddenDim, cellDim, device, L"classifierOutput");
 
     auto labels = InputVariable({ numOutputClasses }, DataType::Float, L"labels", { Axis::DefaultBatchAxis() });
-    auto trainingLoss = CNTK::CrossEntropyWithSoftmax(classifierOutput, labels, L"lossFunction");
-    auto prediction = CNTK::ClassificationError(classifierOutput, labels, L"classificationError");
+    auto trainingLoss = CrossEntropyWithSoftmax(classifierOutput, labels, L"lossFunction");
+    auto prediction = ClassificationError(classifierOutput, labels, L"classificationError");
 
     auto minibatchSource = TextFormatMinibatchSource(L"Train.ctf", { { L"features", inputDim, true, L"x" }, { L"labels", numOutputClasses, false, L"y" } }, MinibatchSource::FullDataSweep);
     auto featureStreamInfo = minibatchSource->StreamInfo(features);
@@ -808,46 +810,101 @@ void TestCheckpointingWithStatefulNodes(const DeviceDescriptor& device)
     }
 }
 
-void SerializationTests()
+BOOST_AUTO_TEST_SUITE(SerializationSuite)
+
+BOOST_AUTO_TEST_CASE(ExceptionsAreRaisedForNonExistentPaths)
 {
-    fprintf(stderr, "\nSerializationTests..\n");
-
-    TestLoadingAModelWithALoadBatchNormFunction();
-
     TestThatExceptionsAreRaisedForNonExistentPaths();
-    TestLoadingDictionariesGeneratedFromPresentPastAndFutureProtos();
+}
 
+BOOST_AUTO_TEST_CASE(DictionarySerialization)
+{
     TestDictionarySerialization(1);
     TestDictionarySerialization(2);
     TestDictionarySerialization(4);
     TestDictionarySerialization(8);
     TestDictionarySerialization(16);
+}
 
+BOOST_AUTO_TEST_CASE(LoadingDictionariesGeneratedFromPresentPastAndFutureProtos)
+{
+    TestLoadingDictionariesGeneratedFromPresentPastAndFutureProtos();
+}
+
+BOOST_AUTO_TEST_CASE(LargeValueSerialization)
+{
     TestLargeValueSerialization<double>(10000000);
     TestLargeValueSerialization<float>(100000000);
+}
 
+BOOST_AUTO_TEST_CASE(LargeLernerSerializationInCpu)
+{
     TestLearnerSerialization<float>(5, DeviceDescriptor::CPUDevice());
     TestLearnerSerialization<double>(10, DeviceDescriptor::CPUDevice());
+}
 
+BOOST_AUTO_TEST_CASE(FunctionsForEquality)
+{
     TestFunctionsForEquality(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_CASE(FunctionSerializationInCPU)
+{
     TestFunctionSerialization(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_CASE(ModelSerializationDuringTrainingInCPU)
+{
     TestModelSerializationDuringTraining(DeviceDescriptor::CPUDevice());
+}
     
+BOOST_AUTO_TEST_CASE(CheckpointingInCPU)
+{
     TestCheckpointing(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_CASE(LegacyModelSavingInCPU)
+{
     TestLegacyModelSaving(DeviceDescriptor::CPUDevice());
+}
 
+BOOST_AUTO_TEST_CASE(CheckpointingWithStatefulNodesInCPU)
+{
     TestCheckpointingWithStatefulNodes(DeviceDescriptor::CPUDevice());
+}
 
-    if (IsGPUAvailable())
+BOOST_AUTO_TEST_CASE(LearnerSerializationInGPU, *boost::unit_test::precondition(GpuAvailable))
     {
         TestLearnerSerialization<float>(5, DeviceDescriptor::GPUDevice(0));
         TestLearnerSerialization<double>(10, DeviceDescriptor::GPUDevice(0));
-        TestFunctionSerialization(DeviceDescriptor::GPUDevice(0));
-        TestModelSerializationDuringTraining(DeviceDescriptor::GPUDevice(0));
-        TestCheckpointing(DeviceDescriptor::GPUDevice(0));
-        TestLegacyModelSaving(DeviceDescriptor::GPUDevice(0));
+}
 
+BOOST_AUTO_TEST_CASE(FunctionSerializationInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
+        TestFunctionSerialization(DeviceDescriptor::GPUDevice(0));
+}
+
+BOOST_AUTO_TEST_CASE(ModelSerializationDuringTrainingInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
+        TestModelSerializationDuringTraining(DeviceDescriptor::GPUDevice(0));
+}
+
+BOOST_AUTO_TEST_CASE(CheckpointingInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
+        TestCheckpointing(DeviceDescriptor::GPUDevice(0));
+}
+
+
+BOOST_AUTO_TEST_CASE(LegacyModelSavingInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
+        TestLegacyModelSaving(DeviceDescriptor::GPUDevice(0));
+}
+
+BOOST_AUTO_TEST_CASE(CheckpointingWithStatefulNodesInGPU, *boost::unit_test::precondition(GpuAvailable))
+{
         TestCheckpointingWithStatefulNodes(DeviceDescriptor::GPUDevice(0));
     }
 
-}
+BOOST_AUTO_TEST_SUITE_END()
+
+}}}}
