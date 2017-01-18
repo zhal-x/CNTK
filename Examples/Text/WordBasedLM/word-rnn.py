@@ -145,20 +145,18 @@ def sample(
     word_to_ix,       # Dictionary mapping tokens to indices.
     vocab_dim,        # Size of vocabulary.
     prime_text='',    # Text for priming the model.
-    use_hardmax=True, # Tells whether hardmax should be used.
     length=100,       # Length of sequence to generate.
     alpha=1.0         # Scaling-exponent used for tweaking the probablities coming from the model. Lower value --> higher diversity.
     ):
 
-    def sample_word(p):
-        if use_hardmax:
-            w = np.argmax(p, axis=2)[0,0]
-        else:
-            # normalize probabilities then take weighted sample
-            p = np.exp(alpha* (p-np.max(p)))
-            p = p/np.sum(p)
-            w = np.random.choice(range(vocab_dim), p=p.ravel())
-        return w
+    def sample_word_index(p):
+
+        # normalize probabilities then take weighted sample
+        p = np.ravel(p)
+        p = np.exp(alpha* (p-np.max(p)))
+        p = p/np.sum(p)
+        word_index = np.random.choice(range(vocab_dim), p=np.ravel(p))
+        return word_index
 
     plen = 1
     prime = -1
@@ -185,7 +183,7 @@ def sample(
         if i < plen-1:
             idx = word_to_ix[words[i+1]]
         else:
-            idx = sample_word(p)
+            idx = sample_word_index(p)
 
         output.append(idx)
         x = C.one_hot([[int(idx)]], vocab_dim)
@@ -218,7 +216,7 @@ def create_inputs(vocab_dim, asSparse):
 
 def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, total_samples, total_time):
 
-#    print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=0.5))
+    print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=1.0, length=10))
 
     id_of_priming_token =  word_to_ix['<unk>']
 
@@ -240,27 +238,31 @@ def train_lm():
     data, word_to_ix, ix_to_word, data_size, vocab_dim = load_data_and_vocab(training_text_file, word_to_ix_file_path)
     
 
-    # Model the source and target inputs to the model
+    # Create model nodes for the source and target inputs
     input_sequence, label_sequence = create_inputs(vocab_dim, False)
 
-    # create the node creating the latent vector
-    softmax_input, ce, errs = create_model(input_sequence, label_sequence, vocab_dim, hidden_dim)
+    # Create the model. In has three output nodes
+    # rnn_latent_output: this provides the latent representation of the next token
+    # cross_entropy: this is used training criterion
+    # error: this a binary indicator if the model predicts the correct word
+    rnn_latent_output, cross_entropy, error = create_model(input_sequence, label_sequence, vocab_dim, hidden_dim)
     
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
     gradient_clipping_with_truncation = True
-    learner = momentum_sgd(ce.parameters, lr_per_sample, momentum_time_constant, 
+    learner = momentum_sgd(cross_entropy.parameters, lr_per_sample, momentum_time_constant, 
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-    trainer = Trainer(softmax_input, ce, errs, learner)
+    trainer = Trainer(rnn_latent_output, cross_entropy, error, learner)
 
     minibatches_per_epoch = int((data_size / minibatch_size))
     total_num_minibatches = num_epochs * minibatches_per_epoch
     
     # print out some useful training information
-    log_number_of_parameters(ce) ; print()
+    log_number_of_parameters(cross_entropy) ; print()
     
+    # Run the training loop
     epoche_count = 0
     num_trained_samples = 0
     num_trained_samples_within_current_epoche = 0
@@ -269,10 +271,12 @@ def train_lm():
     for i in range(0, total_num_minibatches):
         t_start = timeit.default_timer()
         if num_trained_samples_within_current_epoche + minibatch_size+1 >= data_size:
+            # If the next minbatch would use more data than available the
+            # store model for current epoche and start new epoche.
             num_trained_samples_within_current_epoche = 0
             epoche_count += 1
             model_filename = "models/lm_epoch%d.dnn" % epoche_count
-            softmax_input.save_model(model_filename)
+            rnn_latent_output.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
         # get the datafor next batch
@@ -288,35 +292,14 @@ def train_lm():
         t_end =  timeit.default_timer()
         samples_per_second = minibatch_size / (t_end - t_start)
 
+        # Print progress report every num_samples_between_progress_report samples
         if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
-            print_progress(samples_per_second, softmax_input, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
+            print_progress(samples_per_second, rnn_latent_output, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
             num_trained_samples_since_last_report = 0
 
         num_trained_samples += minibatch_size
         num_trained_samples_since_last_report += minibatch_size
         num_trained_samples_within_current_epoche += minibatch_size
-
-# Loads the model from the specified file, samples a sequence of specfied length and writes it to the output file.
-def load_and_sample(
-        model_filename,         # Relative path of model file
-        word_to_ix_file_path,   # Relative path of word index file
-        prime_text = '',        # Text to b used for priming the model
-        use_hardmax = False,    # Tells wehter hardmax should be used
-        length = 100,           # Length of the sample to be generated
-        alpha = 1               # Scaling exponent used for tweaking the probablities coming from the model. Used to control diversity of generated sequences.
-        ):
-    
-    # load the model
-    model = load_model(model_filename)
-    
-    # load the vocab
-    word_to_ix, ix_to_word = load_word_to_ix(word_to_ix_file_path)
-    
-    output = sample(model, ix_to_word, word_to_ix, len(word_to_ix), prime_text=prime_text, use_hardmax=use_hardmax, length=length, alpha=alpha)
-    
-    ff = open('output.txt', 'w', encoding='utf-8')
-    ff.write(output)
-    ff.close()
 
 if __name__=='__main__':
 
@@ -351,8 +334,8 @@ if __name__=='__main__':
         softmax_sample_size = 1000
         clipping_threshold_per_sample = 10.0
 
-    num_samples_between_progress_report = 1000
-    num_words_to_use_in_progress_print = 500
+    num_samples_between_progress_report = 100000
+    num_words_to_use_in_progress_print = 5000
 
     use_sampled_softmax = True
     use_sparse = use_sampled_softmax
