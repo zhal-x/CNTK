@@ -62,8 +62,9 @@ if __name__=='__main__':
     # downloading the data
     url ="http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz"
     tmpGz = "tmp.tgz"
-    print("downloading " + url + " to " + tmpGz)
-    urllib.request.urlretrieve(url, tmpGz)
+    if not os.path.isfile(tmpGz):
+        print("downloading " + url + " to " + tmpGz)
+        urllib.request.urlretrieve(url, tmpGz)
 
     # extracting the files we need from the tarfile
     fileReader=tarfile.open(tmpGz, 'r') 
@@ -75,8 +76,8 @@ if __name__=='__main__':
     fileReader.close()
 
     #removing the temporary file
-    os.remove(tmpGz)
+    #os.remove(tmpGz)
 
     # from the training file generate a number of helper files
-    word2count = count_words_in_file(Paths,train)
+    word2count = count_words_in_file(Paths.train)
     write_vocab_and_frequencies(word2count, Paths.tokens, Paths.frequencies, Paths.token2frequency, Paths.token2id)
