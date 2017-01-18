@@ -18,6 +18,7 @@ from cntk.models import LayerStack, Sequential
 from cntk.utils import log_number_of_parameters, ProgressPrinter
 from data_reader import *
 from math import log, exp
+from download_data import Paths
 
 from cntk.device import set_default_device, cpu, gpu
 
@@ -113,7 +114,7 @@ def create_model(input_sequence, label_sequence, vocab_dim, hidden_dim):
     if use_full_softmax:
         softmax_input, ce, errs = ce_full_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim)
     else:
-        weights = load_sampling_weights(sampling_weights_file)
+        weights = load_sampling_weights(Paths.frequencies)
         smoothed_weights = np.float32( np.power(weights, alpha))
         sampling_weights = C.reshape(C.Constant(smoothed_weights), shape = (1,vocab_dim))
         softmax_input, ce, errs = cross_entropy_with_sampled_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim, softmax_sample_size, sampling_weights)
@@ -254,7 +255,11 @@ def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation
 
 
 # Creates and trains a rnn the language model using sampled softmax as training criterion.
-def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sampling_weights_file_path, total_num_epochs, softmax_sample_size, alpha):
+def train_lm():
+    training_text_file = Paths.train
+    validation_text_file = Paths.validation
+    word_to_ix_file_path = Paths.token2id
+    sampling_weights_file_path = Paths.frequencies
 
     # load the data and vocab
     data, word_to_ix, ix_to_word, data_size, vocab_dim = load_data_and_vocab(training_text_file, word_to_ix_file_path)
@@ -276,7 +281,7 @@ def train_lm(training_text_file, validation_text_file, word_to_ix_file_path, sam
     trainer = Trainer(softmax_input, ce, errs, learner)
 
     minibatches_per_epoch = int((data_size / minibatch_size))
-    total_num_minibatches = total_num_epochs * minibatches_per_epoch
+    total_num_minibatches = num_epochs * minibatches_per_epoch
     
     # print out some useful training information
     log_number_of_parameters(ce) ; print()
@@ -344,18 +349,7 @@ if __name__=='__main__':
     # model sizes according to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
     type = 'medium'
 
-
-    if type == 'test':
-        hidden_dim = 10
-        num_layers = 2
-        num_epochs = 150
-        minibatch_size = 20
-        alpha = 0.75
-        learning_rate = 0.003
-        softmax_sample_size = 1000
-        clipping_threshold_per_sample = 5.0
-
-    elif type == 'small':
+    if type == 'small':
         hidden_dim = 200
         num_layers = 2
         num_epochs = 150
@@ -395,11 +389,6 @@ if __name__=='__main__':
     import _cntk_py
     _cntk_py.disable_gradient_accumulation_optimization()
 
-    training_text_file = "ptbData/ptb.train.txt"
-    test_text_file = "ptbData/ptb.valid.txt"
-    word2index_file = "ptbData/ptb.word2id.txt"
-    sampling_weights_file = "ptbData/ptb.freq.txt"
-
 
     # train the LM
-    train_lm(training_text_file, test_text_file, word2index_file, sampling_weights_file, num_epochs, softmax_sample_size, alpha)
+    train_lm()
