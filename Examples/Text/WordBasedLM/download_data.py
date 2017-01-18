@@ -1,3 +1,11 @@
+﻿# ==============================================================================
+# Copyright (c) Microsoft. All rights reserved.
+# Licensed under the MIT license. See LICENSE.md file in the project root
+# for full license information.
+# ==============================================================================
+
+# The program downloads training, validation and test data and creates additional files 
+# with token-ids and frequencies fro it.
 import urllib.request, os, sys, tarfile, operator
 
 # accumulate word counts in dictionary

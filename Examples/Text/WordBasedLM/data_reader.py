@@ -1,3 +1,9 @@
+﻿# ==============================================================================
+# Copyright (c) Microsoft. All rights reserved.
+# Licensed under the MIT license. See LICENSE.md file in the project root
+# for full license information.
+# ==============================================================================
+
 import cntk as C
 import os
 
@@ -52,8 +58,11 @@ def text_file_to_word_ids(text_file_path, word_to_ix):
 
     return word_sequence
 
-# read text and map it into a list of word indices
-def load_data_and_vocab(text_file_path, word_to_ix_file_path):
+# Read a text and convert the tokens to a corresponding list of ids using the providided token-to-id map
+def load_data_and_vocab(
+    text_file_path,      # input text file
+    word_to_ix_file_path # Dictionary mapping tokens to ids
+    ):
     word_to_ix, ix_to_word = load_word_to_ix(word_to_ix_file_path)
 
     # represent text be sequence of words indices 'word_sequence'
