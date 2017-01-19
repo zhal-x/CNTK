@@ -26,20 +26,10 @@ from cntk.device import set_default_device, cpu, gpu
 # Model sizes similar to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
 type = 'medium'
 
-if type == 'small':
-    hidden_dim = 200
-    num_layers = 2
-    num_epochs = 150
-    minibatch_size = 20
-    alpha = 0.75
-    learning_rate = 0.003
-    softmax_sample_size = 1000
-    clipping_threshold_per_sample = 5.0
-elif type == 'medium':
+if type == 'medium':
     hidden_dim = 650
     num_layers = 2
     num_epochs = 39
-    minibatch_size = 35
     alpha = 0.75
     learning_rate = 0.003
     softmax_sample_size = 1000
@@ -48,14 +38,13 @@ elif type == 'large':
     hidden_dim = 1500
     num_layers = 2
     num_epochs = 55
-    minibatch_size = 35
     alpha = 0.75
     learning_rate = 0.001
     softmax_sample_size = 1000
     clipping_threshold_per_sample = 10.0
 
-num_samples_between_progress_report = 100000
-num_words_to_use_in_progress_print = 5000
+num_samples_between_progress_report = 100
+num_words_to_use_in_progress_print = 50
 
 use_sampled_softmax = True
 use_sparse = use_sampled_softmax
@@ -104,15 +93,12 @@ def cross_entropy_with_sampled_softmax(
     inclusion_probs = C.random_sample_inclusion_frequency(sampling_weights, num_samples, allow_duplicates) # dense row [1 * vocab_size]
     log_prior = C.log(inclusion_probs) # dense row [1 * vocab_dim]
 
-
-    print("hidden_vector: "+str(hidden_vector.shape))
-    wS = C.times(sample_selector, weights, name='wS') # [num_samples * hidden_dim]
-    print("ws:"+str(wS.shape))
-    zS = C.times_transpose(wS, hidden_vector, name='zS1') + C.times(sample_selector, bias, name='zS2') - C.times_transpose (sample_selector, log_prior, name='zS3')# [num_samples]
+    wS = C.times(sample_selector, weights) # [num_samples * hidden_dim]
+    zS = C.times_transpose(wS, hidden_vector) + C.times(sample_selector, bias) - C.times_transpose (sample_selector, log_prior)# [num_samples]
 
     # Getting the weight vector for the true label. Dimension hidden_dim
-    wT = C.times(target_vector, weights, name='wT') # [1 * hidden_dim]
-    zT = C.times_transpose(wT, hidden_vector, name='zT1') + C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
+    wT = C.times(target_vector, weights) # [1 * hidden_dim]
+    zT = C.times_transpose(wT, hidden_vector) + C.times(target_vector, bias) - C.times_transpose(target_vector, log_prior) # [1]
 
 
     zSReduced = C.reduce_log_sum(zS)
@@ -162,22 +148,33 @@ def log_softmax(z,    # numpy array
 
 # Computes the average cross entropy (in nats) for the specified text
 def compute_average_cross_entropy(
-    model_node,          # node computing the inputs to softmax
-    word_ids,            # Sequence for which to compute the cross-entropy. Sequence is specified as a list of (word) ids.
+    model_node,           # node computing the inputs to softmax
+    word_sequences,       # List of word sequences
     index_of_prime_word,  # Index (of word) to prime the model
-    vocab_dim
+    word_to_id,
+    max_num_words         # Maximum number of words to use (use fewer to increase speed)
     ):
     
-    priming_input = C.one_hot([[index_of_prime_word]], vocab_dim)
-    arguments = (priming_input, [True])
+    id_of_sentence_start =  word_to_ix['<s>']
 
     total_cross_entropy = 0.0
-    for word_id in word_ids:
-        z = model_node.eval(arguments).flatten()
-        log_p = log_softmax(z, word_id)
-        total_cross_entropy -= log_p
-        x = C.one_hot([[int(word_id)]], vocab_dim)
-        arguments = (x, [False])
+    word_count = 0
+    for word_sequence in word_sequences:
+        priming_input = C.one_hot([[id_of_sentence_start]], len(word_to_id))
+        arguments = (priming_input, [True])
+
+        word_ids = [word_to_id[word] for word in word_sequence[1 : ] ]
+
+        for word_id in word_ids:
+            z = model_node.eval(arguments).flatten()
+            log_p = log_softmax(z, word_id)
+            total_cross_entropy -= log_p
+            x = C.one_hot([[int(word_id)]], vocab_dim)
+            arguments = (x, [False])
+
+        word_count += len(word_ids)
+        if word_count >= max_num_words:
+            break
 
     return total_cross_entropy / len(word_ids)
 
@@ -259,15 +256,9 @@ def create_inputs(vocab_dim):
     return input_sequence, label_sequence
 
 def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, total_samples, total_time):
-
+    word_sequences, word_to_ix, ix_to_word, vocab_dim = load_data_and_vocab(validation_text_file, Paths.token2id)
     print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=1.0, length=10))
 
-    id_of_priming_token =  word_to_ix['<unk>']
-
-    # load the test data
-    word_ids_test = text_file_to_word_ids(validation_text_file, word_to_ix)
-    word_ids_test = word_ids_test[0:num_words_to_use_in_progress_print]
-    average_cross_entropy = compute_average_cross_entropy(model, word_ids_test, id_of_priming_token, vocab_dim)
     print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
 
@@ -279,7 +270,7 @@ def train_lm():
     sampling_weights_file_path = Paths.frequencies
 
     # load the data and vocab
-    data, word_to_ix, ix_to_word, data_size, vocab_dim = load_data_and_vocab(training_text_file, word_to_ix_file_path)
+    word_sequences, word_to_ix, ix_to_word, vocab_dim = load_data_and_vocab(training_text_file, word_to_ix_file_path)
     
 
     # Create model nodes for the source and target inputs
@@ -300,50 +291,45 @@ def train_lm():
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
     trainer = Trainer(softmax_input, cross_entropy, error, learner)
 
-    minibatches_per_epoch = int((data_size / minibatch_size))
-    total_num_minibatches = num_epochs * minibatches_per_epoch
     
     # print out some useful training information
     log_number_of_parameters(softmax_input) ; print()
     
     # Run the training loop
-    epoch_count = 0
     num_trained_samples = 0
-    num_trained_samples_within_current_epoche = 0
     num_trained_samples_since_last_report = 0
 
-    for i in range(0, total_num_minibatches):
-        t_start = timeit.default_timer()
-        if num_trained_samples_within_current_epoche + minibatch_size+1 >= data_size:
-            # If the next minbatch would use more data than available the
-            # store model for current epoche and start new epoche.
-            num_trained_samples_within_current_epoche = 0
-            epoch_count += 1
-            model_filename = "models/lm_epoch%d.dnn" % epoche_count
-            softmax_input.save_model(model_filename)
-            print("Saved model to '%s'" % model_filename)
+    for epoch_count in range(0, num_epochs):
+        num_trained_samples_within_current_epoch = 0
+        num_trained_sequences_within_current_epoch = 0
 
-        # get the datafor next batch
-        features, labels = get_data(num_trained_samples_within_current_epoche, minibatch_size, data, word_to_ix, vocab_dim)
+        # Loop over all sequences training data
+        for word_sequence in word_sequences:
+            t_start = timeit.default_timer()
 
-        # Specify the mapping of input variables in the model to actual minibatch data to be trained with
-        # If it's the start of the data, we specify that we are looking at a new sequence (True)
-        mask = [False] 
-        if num_trained_samples_within_current_epoche == 0:
-            mask = [True]
-        arguments = ({input_sequence : features, label_sequence : labels}, mask)
-        trainer.train_minibatch(arguments)
-        t_end =  timeit.default_timer()
-        samples_per_second = minibatch_size / (t_end - t_start)
+            # get the data for next sequence (=mini batch)
+            features, labels, num_samples = get_data(word_sequence, word_to_ix, vocab_dim)
+            num_trained_sequences_within_current_epoch += 1
+            num_trained_samples_since_last_report += num_samples
+            num_trained_samples += num_samples
+            num_trained_samples_within_current_epoch += num_samples
 
-        # Print progress report every num_samples_between_progress_report samples
-        if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
-            print_progress(samples_per_second, softmax_input, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
-            num_trained_samples_since_last_report = 0
+            # Specify the mapping of input variables in the model to actual minibatch data to be trained with
+            arguments = ({input_sequence : features, label_sequence : labels})
+            trainer.train_minibatch(arguments)
+            t_end =  timeit.default_timer()
+            samples_per_second = num_samples / (t_end - t_start)
 
-        num_trained_samples += minibatch_size
-        num_trained_samples_since_last_report += minibatch_size
-        num_trained_samples_within_current_epoche += minibatch_size
+            # Print progress report every num_samples_between_progress_report samples
+            if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
+                print_progress(samples_per_second, softmax_input, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
+                num_trained_samples_since_last_report = 0
+
+        # store model for current epoch
+        model_filename = "models/lm_epoch%d.dnn" % epoch_count
+        softmax_input.save_model(model_filename)
+        print("Saved model to '%s'" % model_filename)
+
 
 if __name__=='__main__':
 

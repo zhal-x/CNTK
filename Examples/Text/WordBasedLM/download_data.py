@@ -97,7 +97,7 @@ if __name__=='__main__':
     fileReader.close()
 
     #removing the temporary file
-    #os.remove(tmpGz)
+    os.remove(tmpGz)
 
     # from the training file generate a number of helper files
     word2count = count_words_in_file(Paths.train)
