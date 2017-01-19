@@ -150,12 +150,10 @@ def log_softmax(z,    # numpy array
 def compute_average_cross_entropy(
     model_node,           # node computing the inputs to softmax
     word_sequences,       # List of word sequences
-    index_of_prime_word,  # Index (of word) to prime the model
-    word_to_id,
-    max_num_words         # Maximum number of words to use (use fewer to increase speed)
+    word_to_id
     ):
     
-    id_of_sentence_start =  word_to_ix['<s>']
+    id_of_sentence_start =  word_to_id['<s>']
 
     total_cross_entropy = 0.0
     word_count = 0
@@ -167,23 +165,27 @@ def compute_average_cross_entropy(
 
         for word_id in word_ids:
             z = model_node.eval(arguments).flatten()
+            # temporary logging as thwere where out of index issues with recent  build !!!!!!!!!!!!!!!!!!!!!
+            if len(z) != 1001:
+                print("len(z) "+str(len(z))+ "word_id="+ str(word_id))
+
             log_p = log_softmax(z, word_id)
             total_cross_entropy -= log_p
-            x = C.one_hot([[int(word_id)]], vocab_dim)
+            x = C.one_hot([[int(word_id)]], len(word_to_id))
             arguments = (x, [False])
 
         word_count += len(word_ids)
-        if word_count >= max_num_words:
+        if word_count >= num_words_to_use_in_progress_print:
             break
 
-    return total_cross_entropy / len(word_ids)
+    return total_cross_entropy / word_count
 
 
 # Sample sequences (texts) from the trained model.
 def sample(
     model_node,       # Node computing the inputs to softmax.
-    ix_to_word,       # Dictionary mapping indices to tokens.
-    word_to_ix,       # Dictionary mapping tokens to indices.
+    id_to_word,       # Dictionary mapping indices to tokens.
+    word_to_id,       # Dictionary mapping tokens to indices.
     vocab_dim,        # Size of vocabulary.
     prime_text='',    # Text for priming the model.
     length=100,       # Length of sequence to generate.
@@ -202,13 +204,13 @@ def sample(
     plen = 1
     prime = -1
 
-    # start sequence with first input    
+    # start sequence with first input
     if prime_text != '':
         words = prime_text.split()
         plen = len(words)
-        prime = word_to_ix[words[0]]
+        prime = word_to_id[words[0]]
     else:
-        prime = np.random.choice(range(vocab_dim))
+        prime = word_to_id['<s>']
     x = C.one_hot([[int(prime)]], vocab_dim)
 
     arguments = (x, [True])
@@ -222,7 +224,7 @@ def sample(
         p = model_node.eval(arguments)
         # reset
         if i < plen-1:
-            idx = word_to_ix[words[i+1]]
+            idx = word_to_id[words[i+1]]
         else:
             idx = sample_word_index(p)
 
@@ -241,7 +243,7 @@ def sample(
         arguments = (x, [False])
 
     # return output
-    return ' '.join([ix_to_word[id] for id in output])
+    return ' '.join([id_to_word[id] for id in output])
 
 # Creates model inputs
 def create_inputs(vocab_dim):
@@ -255,9 +257,11 @@ def create_inputs(vocab_dim):
     
     return input_sequence, label_sequence
 
-def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation_text_file, vocab_dim, total_samples, total_time):
-    word_sequences, word_to_ix, ix_to_word, vocab_dim = load_data_and_vocab(validation_text_file, Paths.token2id)
-    print(sample(model, ix_to_word, word_to_ix, vocab_dim, alpha=1.0, length=10))
+def print_progress(samples_per_second, model, id_to_word, word_to_id, validation_text_file, vocab_dim, total_samples, total_time):
+    word_sequences, word_to_id, id_to_word, vocab_dim = load_data_and_vocab(validation_text_file, Paths.token2id)
+    print(sample(model, id_to_word, word_to_id, vocab_dim, alpha=1.0, length=10))
+    
+    average_cross_entropy = compute_average_cross_entropy(model, word_sequences, word_to_id)
 
     print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
@@ -266,11 +270,11 @@ def print_progress(samples_per_second, model, ix_to_word, word_to_ix, validation
 def train_lm():
     training_text_file = Paths.train
     validation_text_file = Paths.validation
-    word_to_ix_file_path = Paths.token2id
+    word_to_id_file_path = Paths.token2id
     sampling_weights_file_path = Paths.frequencies
 
     # load the data and vocab
-    word_sequences, word_to_ix, ix_to_word, vocab_dim = load_data_and_vocab(training_text_file, word_to_ix_file_path)
+    word_sequences, word_to_id, id_to_word, vocab_dim = load_data_and_vocab(training_text_file, word_to_id_file_path)
     
 
     # Create model nodes for the source and target inputs
@@ -308,7 +312,7 @@ def train_lm():
             t_start = timeit.default_timer()
 
             # get the data for next sequence (=mini batch)
-            features, labels, num_samples = get_data(word_sequence, word_to_ix, vocab_dim)
+            features, labels, num_samples = get_data(word_sequence, word_to_id, vocab_dim)
             num_trained_sequences_within_current_epoch += 1
             num_trained_samples_since_last_report += num_samples
             num_trained_samples += num_samples
@@ -322,7 +326,7 @@ def train_lm():
 
             # Print progress report every num_samples_between_progress_report samples
             if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
-                print_progress(samples_per_second, softmax_input, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
+                print_progress(samples_per_second, softmax_input, id_to_word, word_to_id, validation_text_file, vocab_dim, num_trained_samples, t_start)
                 num_trained_samples_since_last_report = 0
 
         # store model for current epoch

@@ -48,13 +48,13 @@ def write_vocab_and_frequencies(word2count, vocab_file_path, freq_file_path, wor
     freq_file.close()
     word2count_file.close()
 
-def append_eos(path):
+def add_sentence_sepparators(path):
     with open(path,'r') as f:
         lines = f.read().splitlines()
 
     with open(path,'w') as f:
         for line in lines:
-            f.write(line + "<eos>\n")
+            f.write('<s> ' + line + "</s>\n")
 
 
 class Paths(object):
@@ -71,7 +71,7 @@ class Paths(object):
     tokens          = os.path.join(data_dir, 'ptb.vocab.txt')
     frequencies     = os.path.join(data_dir, 'ptb.freq.txt')
     token2frequency = os.path.join(data_dir, 'ptb.token2freq.txt')
-    token2id        = os.path.join(data_dir, 'ptb.freq2token.txt')
+    token2id        = os.path.join(data_dir, 'ptb.token2id.txt')
 
 
 if __name__=='__main__':
@@ -90,14 +90,14 @@ if __name__=='__main__':
     fileReader.extract(Paths.train_sub,      path = Paths.data_dir)
     fileReader.extract(Paths.validation_sub, path = Paths.data_dir)
 
-    append_eos(os.path.join(Paths.data_dir, Paths.test_sub))
-    append_eos(os.path.join(Paths.data_dir, Paths.train_sub))
-    append_eos(os.path.join(Paths.data_dir, Paths.validation_sub))
+    add_sentence_sepparators(os.path.join(Paths.data_dir, Paths.test_sub))
+    add_sentence_sepparators(os.path.join(Paths.data_dir, Paths.train_sub))
+    add_sentence_sepparators(os.path.join(Paths.data_dir, Paths.validation_sub))
 
     fileReader.close()
 
     #removing the temporary file
-    os.remove(tmpGz)
+    #os.remove(tmpGz)
 
     # from the training file generate a number of helper files
     word2count = count_words_in_file(Paths.train)
