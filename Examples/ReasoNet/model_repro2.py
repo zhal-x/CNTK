@@ -409,7 +409,7 @@ def train(model, train_data, max_epochs=1, save_model_flag=False, epoch_size=270
   #           gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
   #           gradient_clipping_with_truncation=gradient_clipping_with_truncation)
   #learn = learner.adagrad(model.parameters, lr_schedule, gradient_clipping_threshold_per_sample = clipping_threshold_per_sample, gradient_clipping_with_truncation = gradient_clipping_with_truncation)
-  learn = learner.momentum_sgd(model.parameters, lr_schedule, momentum, 
+  learn = learner.momentum_sgd(model.parameters, lr_schedule, momentum,True, 
               gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
               gradient_clipping_with_truncation=gradient_clipping_with_truncation)
 
