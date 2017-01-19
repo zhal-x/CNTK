@@ -17,13 +17,13 @@ def add_to_count(word, word2Count):
 
 # for a text file returns a dictionary with the frequency of each word
 def count_words_in_file(path):
-    f=open(path,'r')
-    word2count = {}
-    for line in f:
-        words = line.split()
-        for word in words:
-            add_to_count(word, word2count)
-    return word2count
+    with open(path,'r') as f:
+        word2count = {}
+        for line in f:
+            words = line.split()
+            for word in words:
+                add_to_count(word, word2count)
+        return word2count
 
 # from a dictionary mapping words to counts creates two files: 
 # * a vocabulary file containing all words sorted by drecreasing frequency, one word per line
@@ -47,6 +47,15 @@ def write_vocab_and_frequencies(word2count, vocab_file_path, freq_file_path, wor
     vocab_file.close()
     freq_file.close()
     word2count_file.close()
+
+def append_eos(path):
+    with open(path,'r') as f:
+        lines = f.read().splitlines()
+
+    with open(path,'w') as f:
+        for line in lines:
+            f.write(line + "<eos>\n")
+
 
 class Paths(object):
     data_dir   = './ptb/'
@@ -81,10 +90,14 @@ if __name__=='__main__':
     fileReader.extract(Paths.train_sub,      path = Paths.data_dir)
     fileReader.extract(Paths.validation_sub, path = Paths.data_dir)
 
+    append_eos(os.path.join(Paths.data_dir, Paths.test_sub))
+    append_eos(os.path.join(Paths.data_dir, Paths.train_sub))
+    append_eos(os.path.join(Paths.data_dir, Paths.validation_sub))
+
     fileReader.close()
 
     #removing the temporary file
-    os.remove(tmpGz)
+    #os.remove(tmpGz)
 
     # from the training file generate a number of helper files
     word2count = count_words_in_file(Paths.train)
