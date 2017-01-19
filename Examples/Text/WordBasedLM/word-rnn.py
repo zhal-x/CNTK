@@ -92,7 +92,7 @@ def cross_entropy_with_sampled_softmax(
 def create_model(input_sequence, label_sequence, vocab_dim, hidden_dim):
     # Create the rnn that computes the latent representation for the next token.
     rnn_with_latent_output = Sequential([
-         C.Embedding(hidden_dim),      
+        C.Embedding(hidden_dim),      
         LayerStack(num_layers, lambda: 
                    Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
         ])
@@ -206,7 +206,7 @@ def sample(
     return ' '.join([ix_to_word[id] for id in output])
 
 # Creates model inputs
-def create_inputs(vocab_dim, asSparse):
+def create_inputs(vocab_dim):
     batch_axis = Axis.default_batch_axis()
     input_seq_axis = Axis('inputAxis')
 
@@ -242,7 +242,7 @@ def train_lm():
     
 
     # Create model nodes for the source and target inputs
-    input_sequence, label_sequence = create_inputs(vocab_dim, False)
+    input_sequence, label_sequence = create_inputs(vocab_dim)
 
     # Create the model. In has three output nodes
     # rnn_latent_output: this provides the latent representation of the next token
@@ -343,10 +343,7 @@ if __name__=='__main__':
     use_sampled_softmax = True
     use_sparse = use_sampled_softmax
 
-    set_default_device(gpu(0)) 
-
-    # Work-arround for some bug that seems to affect gradient_accumulation_optimization when dealing with sparse.
-    # Will be removed before checkin as a fix for this seems to be already im master.
-
+    set_default_device(cpu()) 
+    
     # train the LM
     train_lm()
