@@ -73,9 +73,12 @@ def cross_entropy_with_sampled_softmax(
     wT = C.times(target_vector, weights, name='wT') # [1 * hidden_dim]
     zT = C.times_transpose(wT, hidden_vector, name='zT1') + C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
 
+
     zSReduced = C.reduce_log_sum(zS)
 
     # Compute the cross entropy that is used for training.
+    # We don't check whether any of the classes in the random samples conincides with the true label, so it might happen that the true class is counted
+    # twice in the normalising demnominator of sampled softmax.
     cross_entropy_on_samples = C.log_add_exp(zT, zSReduced) - zT
 
     # For applying the model we also output a node providing the input for the full softmax
@@ -193,7 +196,7 @@ def sample(
     # loop through length of generated text, sampling along the way
     for i in range(length-plen):
         p = model_node.eval(arguments)
-        idx = sample_word(p)
+        idx = sample_word_index(p)
         output.append(idx)
         x = C.one_hot([[int(idx)]], vocab_dim)
 
@@ -340,10 +343,10 @@ if __name__=='__main__':
     use_sampled_softmax = True
     use_sparse = use_sampled_softmax
 
-    #    set_default_device(cpu()) # this version seem to work fine
-    set_default_device(gpu(0)) # this verversion gives nan results
+    set_default_device(gpu(0)) 
 
-    # work-arround for some bug that seems to affect gradient_accumulation_optimization when dealing wioth sparse
+    # Work-arround for some bug that seems to affect gradient_accumulation_optimization when dealing with sparse.
+    # Will be removed before checkin as a fix for this seems to be already im master.
     import _cntk_py
     _cntk_py.disable_gradient_accumulation_optimization()
 
