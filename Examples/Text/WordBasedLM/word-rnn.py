@@ -254,7 +254,7 @@ def train_lm():
     lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
     gradient_clipping_with_truncation = True
-    learner = momentum_sgd(cross_entropy.parameters, lr_per_sample, momentum_time_constant, 
+    learner = momentum_sgd(cross_entropy.parameters, lr_per_sample, momentum_time_constant, True,
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
     trainer = Trainer(rnn_latent_output, cross_entropy, error, learner)
@@ -347,8 +347,6 @@ if __name__=='__main__':
 
     # Work-arround for some bug that seems to affect gradient_accumulation_optimization when dealing with sparse.
     # Will be removed before checkin as a fix for this seems to be already im master.
-    import _cntk_py
-    _cntk_py.disable_gradient_accumulation_optimization()
 
     # train the LM
     train_lm()

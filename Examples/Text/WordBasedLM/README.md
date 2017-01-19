@@ -1,7 +1,7 @@
 # Build Neural Language Model using Sampled Softmax
 
 This example demonstrates how to use sampled softmax for training a token based neural language model.
-The model predicts the next word in a text given the previous one where the probablity of the next word is computed using a softmax.
+The model predicts the next word in a text given the previous ones where the probablity of the next word is computed using a softmax.
 As the number of different words might be very high this final softmax step can turn out to be costly.
 
 Sampled-softmax is a technique to reduce this cost at training time. For details see e.g. (http://www.tensorflow.org/extras/candidate_sampling.pdf)
