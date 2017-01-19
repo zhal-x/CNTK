@@ -670,8 +670,6 @@ namespace CNTK
                         assert(m_inputs.size() == 2);
                         auto operand = m_inputs[0];
                         auto layout = m_inputs[1];
-                        if (operand.DynamicAxes().empty())
-                            InvalidArgument("ReconcileDynamicAxis: input must have at least one dynamic axis");
                         if (layout.DynamicAxes().empty())
                             InvalidArgument("ReconcileDynamicAxis: layout must have at least one dynamic axis");
                         outputShape = operand.Shape();
@@ -700,7 +698,7 @@ namespace CNTK
         dict[attributesKey] = Attributes();
         dict[uidKey] = Uid();
         if (!Name().empty())
-            dict[nameKey] = Name();
+        dict[nameKey] = Name();
         
         auto inputs = Inputs();
         vector<DictionaryValue> inputUids;
@@ -806,7 +804,26 @@ namespace CNTK
             return std::shared_ptr<BlockFunction>(new BlockFunction(std::move(composite), argumentsMap, blockOpName, std::move(attributes), name, uid),
                                                   [](BlockFunction* ptr) { delete ptr; });
         }
-        else
+
+
+        if (version < 4 && op == PrimitiveOpType::BatchNormalization)
+        {
+            if (Internal::GetComputationNetworkTraceLevel() > 0)
+            {
+                // TODO: all logging functionality should be refactored to live in a logging utility class. 
+                fprintf(stderr, "WARNING: the dictionary (version=%zu) does not contain a required "
+                    "BatchNormalization parameter for the running mean sample count. "
+                    "Injected a new parameter with a value of '0'.", version);
+            }
+
+            // patch up old the model by adding an extra input
+            auto runCount = Constant::Scalar(0.0f, device);
+            // HACK: uid has to be changed (by adding some unique prefix to the auto-generated "Constant"+ID_counter) 
+            // to avoid conflicts with uids recorded in the function graph, which we are deserializing.
+            runCount.m_dataFields->m_uid = L"BatchNormSampleCount" + runCount.m_dataFields->m_uid;
+            inputs.push_back(runCount);
+        }
+        
             return std::shared_ptr<PrimitiveFunction>(new PrimitiveFunction(op, inputs, std::move(attributes), name, uid), 
                                                       [](PrimitiveFunction* ptr) { delete ptr; });
     }
