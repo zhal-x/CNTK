@@ -22,6 +22,45 @@ from download_data import Paths
 
 from cntk.device import set_default_device, cpu, gpu
 
+# Setting global parameters
+# Model sizes similar to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
+type = 'medium'
+
+if type == 'small':
+    hidden_dim = 200
+    num_layers = 2
+    num_epochs = 150
+    minibatch_size = 20
+    alpha = 0.75
+    learning_rate = 0.003
+    softmax_sample_size = 1000
+    clipping_threshold_per_sample = 5.0
+elif type == 'medium':
+    hidden_dim = 650
+    num_layers = 2
+    num_epochs = 39
+    minibatch_size = 35
+    alpha = 0.75
+    learning_rate = 0.003
+    softmax_sample_size = 1000
+    clipping_threshold_per_sample = 5.0
+elif type == 'large':
+    hidden_dim = 1500
+    num_layers = 2
+    num_epochs = 55
+    minibatch_size = 35
+    alpha = 0.75
+    learning_rate = 0.001
+    softmax_sample_size = 1000
+    clipping_threshold_per_sample = 10.0
+
+num_samples_between_progress_report = 100000
+num_words_to_use_in_progress_print = 5000
+
+use_sampled_softmax = True
+use_sparse = use_sampled_softmax
+
+
 # Creates model subgraph computing cross-entropy with softmax.
 def cross_entropy_with_full_softmax(
     hidden_vector,  # Node providing the output of the recurrent layers
@@ -52,11 +91,13 @@ def cross_entropy_with_sampled_softmax(
     bias = C.Parameter(shape = (vocab_dim, 1), init = C.init_bias_default_or_0)
     weights = C.Parameter(shape = (vocab_dim, hidden_dim), init = C.init_default_or_glorot_uniform)
 
+    sample_selector_sparse = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
     if use_sparse:
-        sample_selector = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
+        sample_selector = sample_selector_sparse
     else:
-        # in case we wan't to a dense representation for all data we have to convert the sample selector 
-        sample_selector_sparse = C.random_sample(sampling_weights, num_samples, allow_duplicates) # sparse matrix [num_samples * vocab_size]
+        # Note: Sampled softmax with dense data is only supported for debugging purposes.
+        # It might easily run into memory issues as the matrix 'I' below might be quite large.
+        # In case we wan't to a dense representation for all data we have to convert the sample selector
         I = C.Constant(np.eye(vocab_dim, dtype=np.float32))
         sample_selector = C.times(sample_selector_sparse, I)
 
@@ -245,28 +286,28 @@ def train_lm():
     input_sequence, label_sequence = create_inputs(vocab_dim)
 
     # Create the model. In has three output nodes
-    # rnn_latent_output: this provides the latent representation of the next token
+    # softmax_input: this provides the latent representation of the next token
     # cross_entropy: this is used training criterion
     # error: this a binary indicator if the model predicts the correct word
-    rnn_latent_output, cross_entropy, error = create_model(input_sequence, label_sequence, vocab_dim, hidden_dim)
+    softmax_input, cross_entropy, error = create_model(input_sequence, label_sequence, vocab_dim, hidden_dim)
     
     # Instantiate the trainer object to drive the model training
     lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
     momentum_time_constant = momentum_as_time_constant_schedule(1100)
     gradient_clipping_with_truncation = True
-    learner = momentum_sgd(cross_entropy.parameters, lr_per_sample, momentum_time_constant, True,
+    learner = momentum_sgd(softmax_input.parameters, lr_per_sample, momentum_time_constant, True,
                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-    trainer = Trainer(rnn_latent_output, cross_entropy, error, learner)
+    trainer = Trainer(softmax_input, cross_entropy, error, learner)
 
     minibatches_per_epoch = int((data_size / minibatch_size))
     total_num_minibatches = num_epochs * minibatches_per_epoch
     
     # print out some useful training information
-    log_number_of_parameters(cross_entropy) ; print()
+    log_number_of_parameters(softmax_input) ; print()
     
     # Run the training loop
-    epoche_count = 0
+    epoch_count = 0
     num_trained_samples = 0
     num_trained_samples_within_current_epoche = 0
     num_trained_samples_since_last_report = 0
@@ -277,9 +318,9 @@ def train_lm():
             # If the next minbatch would use more data than available the
             # store model for current epoche and start new epoche.
             num_trained_samples_within_current_epoche = 0
-            epoche_count += 1
+            epoch_count += 1
             model_filename = "models/lm_epoch%d.dnn" % epoche_count
-            rnn_latent_output.save_model(model_filename)
+            softmax_input.save_model(model_filename)
             print("Saved model to '%s'" % model_filename)
 
         # get the datafor next batch
@@ -297,7 +338,7 @@ def train_lm():
 
         # Print progress report every num_samples_between_progress_report samples
         if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
-            print_progress(samples_per_second, rnn_latent_output, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
+            print_progress(samples_per_second, softmax_input, ix_to_word, word_to_ix, validation_text_file, vocab_dim, num_trained_samples, t_start)
             num_trained_samples_since_last_report = 0
 
         num_trained_samples += minibatch_size
@@ -306,44 +347,6 @@ def train_lm():
 
 if __name__=='__main__':
 
-    # model sizes similar to https://arxiv.org/pdf/1409.2329.pdf and https://github.com/tensorflow/models/blob/master/tutorials/rnn/ptb/ptb_word_lm.py
-    type = 'medium'
 
-    if type == 'small':
-        hidden_dim = 200
-        num_layers = 2
-        num_epochs = 150
-        minibatch_size = 20
-        alpha = 0.75
-        learning_rate = 0.003
-        softmax_sample_size = 1000
-        clipping_threshold_per_sample = 5.0
-    elif type == 'medium':
-        hidden_dim = 650
-        num_layers = 2
-        num_epochs = 39
-        minibatch_size = 35
-        alpha = 0.75
-        learning_rate = 0.003
-        softmax_sample_size = 1000
-        clipping_threshold_per_sample = 5.0
-    elif type == 'large':
-        hidden_dim = 1500
-        num_layers = 2
-        num_epochs = 55
-        minibatch_size = 35
-        alpha = 0.75
-        learning_rate = 0.001
-        softmax_sample_size = 1000
-        clipping_threshold_per_sample = 10.0
-
-    num_samples_between_progress_report = 100000
-    num_words_to_use_in_progress_print = 5000
-
-    use_sampled_softmax = True
-    use_sparse = use_sampled_softmax
-
-    set_default_device(cpu()) 
-    
     # train the LM
     train_lm()
