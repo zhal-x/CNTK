@@ -54,7 +54,7 @@ def add_sentence_sepparators(path):
 
     with open(path,'w') as f:
         for line in lines:
-            f.write('<s>' + line + '</s>\n')
+            f.write('<s>' + line + '<s>\n')
 
 
 class Paths(object):

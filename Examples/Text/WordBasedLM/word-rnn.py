@@ -45,6 +45,7 @@ elif type == 'large':
 
 num_samples_between_progress_report = 1000
 num_words_to_use_in_progress_print = 500
+adaption_threshold = 0.2
 
 use_sampled_softmax = True
 use_sparse = use_sampled_softmax
@@ -325,7 +326,7 @@ def train_lm():
                 num_trained_samples_since_last_report = 0
                 if average_cross_entropy < min_cross_entropy:
                     min_cross_entropy = average_cross_entropy
-                elif average_cross_entropy > min_cross_entropy + 0.2:
+                elif average_cross_entropy > min_cross_entropy + adaption_threshold:
                     learning_rate = learning_rate / 2
                     print("Udated learning rate to:"+ str(learning_rate))
         # store model for current epoch
