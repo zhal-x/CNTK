@@ -303,9 +303,10 @@ def sanitize_function(arg):
     Tries to retrieve a Function from the argument or throws an exception if
     that's not possible.
     '''
+    from cntk.ops import combine
 
     if isinstance(arg, cntk_py.Variable):
-        arg = arg.owner
+        arg = combine([arg])
 
     if not isinstance(arg, cntk_py.Function):
         raise TypeError("Object of type %s cannot be cast to Variable" %
@@ -315,7 +316,7 @@ def sanitize_function(arg):
 
 
 def sanitize_var_map(op_arguments, arguments, precision=None,
-                     device=None):
+                     device=None, extract_values_from_minibatch_data=True):
     '''
     Sanitizes a dictionary of `Variable` s to input data such that it can be
     handed off to the evaluation methods
@@ -361,6 +362,12 @@ def sanitize_var_map(op_arguments, arguments, precision=None,
          one of 'float' 'float32, 'double', 'float64', or None
         device (:class:`~cntk.device.DeviceDescriptor`, default None): device
          this value should be put on
+        extract_values_from_minibatch_data (`bool`, defaults to `True`): specifies 
+         if :class:`~cntk.io.MinibatchData` instances in the arguments map are
+         converted to the underlying value (:class:`Value`) instances (default),
+         or if they should remain intact, as they contain additional meta 
+         information required by the Trainer (specifically, by the 
+         :meth:`~cntk.Trainer.train_minibatch` method).
 
     Returns:
         `dict` that maps variables to sanitized batches
@@ -436,9 +443,10 @@ def sanitize_var_map(op_arguments, arguments, precision=None,
                             'sequence begin markers' % (sample_sizes, len(seq_starts)))
 
 
-        if isinstance(batch, MinibatchData):
-            batch = batch.m_data
-        elif not isinstance(batch, cntk_py.Value):
+        if isinstance(batch, MinibatchData) and extract_values_from_minibatch_data:
+            batch = batch.data
+
+        if not (isinstance(batch, MinibatchData) or isinstance(batch, cntk_py.Value)):
             batch = sanitize_batch(var, batch, seq_starts, device)
 
         var_map[var] = batch

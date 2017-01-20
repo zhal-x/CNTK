@@ -24,6 +24,15 @@
 
 %rename(momentum_as_time_constant_schedule) CNTK::MomentumAsTimeConstantSchedule;
 
+// renaming overloads for TrainMinibatch and TestMinibatch that take a map 
+// of Variables and MinibatchData as their first parameter. If this is not done, 
+// the overloads that are legal in C++ will be shadowed and ignored by SWIG.
+// The naming here is somewhat cumbersome, but it's only intended for internal
+// consumption in proxy objects.
+%rename(train_minibatch_overload_for_minibatchdata) CNTK::Trainer::TrainMinibatch(const std::unordered_map<Variable, MinibatchData>&, const DeviceDescriptor& = DeviceDescriptor::UseDefaultDevice());
+%rename(train_minibatch_overload_for_minibatchdata) CNTK::Trainer::TrainMinibatch(const std::unordered_map<Variable, MinibatchData>&, std::unordered_map<Variable, ValuePtr>&, const DeviceDescriptor& = DeviceDescriptor::UseDefaultDevice());
+%rename(test_minibatch_overload_for_minibatchdata) CNTK::Trainer::TestMinibatch(const std::unordered_map<Variable, MinibatchData>&, const DeviceDescriptor& = DeviceDescriptor::UseDefaultDevice());
+
 %rename(l1_regularization_weight) CNTK::AdditionalLearningOptions::l1RegularizationWeight;
 %rename(l2_regularization_weight) CNTK::AdditionalLearningOptions::l2RegularizationWeight;
 %rename(ndcg_at_1) CNTK::NDCGAt1;
@@ -988,29 +997,6 @@ public:
 }
 %enddef
 
-// Trainer initializers.
-// Because SWIG cannot properly handle smart pointers to derived classes (causes memory leak during the check),
-// we need custom constructors.
-
-%extend Trainer
-{
-    Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<DistributedLearnerPtr>& parameterLearners)
-    {
-        std::vector<LearnerPtr> learners;
-        learners.reserve(parameterLearners.size());
-        for(const auto& l : parameterLearners)
-            learners.push_back(l);
-        return CreateTrainer(model, lossFunction, evaluationFunction, learners);
-    }
-
-    Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners)
-    {
-        return CreateTrainer(model, lossFunction, evaluationFunction, parameterLearners);
-    }
-}
-
-%ignore CNTK::Trainer::Trainer;
-
 %unordered_set_conversion(CNTK::Variable, SWIGTYPE_p_CNTK__Variable)
 %unordered_set_conversion(CNTK::Constant, SWIGTYPE_p_CNTK__Constant)
 %unordered_set_conversion(CNTK::Parameter, SWIGTYPE_p_CNTK__Parameter)
@@ -1087,6 +1073,7 @@ public:
 %unordered_map_conversion(CNTK::Parameter, const CNTK::NDArrayViewPtr, SWIGTYPE_p_CNTK__Parameter, SWIGTYPE_p_std__shared_ptrT_CNTK__NDArrayView_t)
 %unordered_map_conversion(CNTK::Parameter, CNTK::NDArrayViewPtr, SWIGTYPE_p_CNTK__Parameter, SWIGTYPE_p_std__shared_ptrT_CNTK__NDArrayView_t)
 %unordered_map_conversion(CNTK::Variable, CNTK::StreamInformation, SWIGTYPE_p_CNTK__Variable, SWIGTYPE_p_CNTK__StreamInformation)
+%unordered_map_conversion(CNTK::Variable, CNTK::MinibatchData, SWIGTYPE_p_CNTK__Variable, SWIGTYPE_p_CNTK__MinibatchData)
 
 %unordered_map_ref_conversion(CNTK::StreamInformation, SWIGTYPE_p_CNTK__StreamInformation, CNTK::MinibatchData, SWIGTYPE_p_CNTK__MinibatchData);
 %unordered_map_ref_conversion(CNTK::Parameter, SWIGTYPE_p_CNTK__Parameter, CNTK::NDArrayViewPtr, SWIGTYPE_p_std__shared_ptrT_CNTK__NDArrayView);
@@ -1109,7 +1096,24 @@ public:
 %include "CNTKLibraryInternals.h"
 %include "CNTKLibrary.h"
 
-%inline {
+%inline %{
+   // Trainer initializers.
+   // Because SWIG cannot properly handle smart pointers to derived classes (causes memory leak during the check for distributed learners),
+   // we need to redefine CreateTrainer.
+    CNTK::TrainerPtr TrainerImpl(const ::CNTK::FunctionPtr& model, const ::CNTK::FunctionPtr& lossFunction, const ::CNTK::FunctionPtr& evaluationFunction, const std::vector<CNTK::DistributedLearnerPtr>& parameterLearners)
+    {
+        std::vector<LearnerPtr> learners;
+        learners.reserve(parameterLearners.size());
+        for(const auto& l : parameterLearners)
+            learners.push_back(l);
+        return CreateTrainer(model, lossFunction, evaluationFunction, learners);
+    }
+
+    CNTK::TrainerPtr TrainerImpl(const ::CNTK::FunctionPtr& model, const ::CNTK::FunctionPtr& lossFunction, const ::CNTK::FunctionPtr& evaluationFunction, const std::vector<CNTK::LearnerPtr>& parameterLearners)
+    {
+        return CreateTrainer(model, lossFunction, evaluationFunction, parameterLearners);
+    }
+
     // Global rank of current worker
     size_t WorkerGlobalRank()
     {
@@ -1121,7 +1125,7 @@ public:
     {
         return CNTK::MPICommunicator()->Workers().size();
     }
-}
+%}
 
 
 //
