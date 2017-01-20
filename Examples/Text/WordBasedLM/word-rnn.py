@@ -31,7 +31,7 @@ if type == 'medium':
     num_layers = 2
     num_epochs = 39
     alpha = 0.75
-    learning_rate = 0.003
+    start_learning_rate = 1
     softmax_sample_size = 1000
     clipping_threshold_per_sample = 5.0
 elif type == 'large':
@@ -39,12 +39,12 @@ elif type == 'large':
     num_layers = 2
     num_epochs = 55
     alpha = 0.75
-    learning_rate = 0.001
+    start_learning_rate = 0.001
     softmax_sample_size = 1000
     clipping_threshold_per_sample = 10.0
 
 num_samples_between_progress_report = 1000
-num_words_to_use_in_progress_print = 50
+num_words_to_use_in_progress_print = 500
 
 use_sampled_softmax = True
 use_sparse = use_sampled_softmax
@@ -152,9 +152,6 @@ def compute_average_cross_entropy(
     word_sequences,       # List of word sequences
     word_to_id
     ):
-    
-    id_of_sentence_start =  word_to_id['<s>']
-
     total_cross_entropy = 0.0
     word_count = 0
     for word_sequence in word_sequences:
@@ -165,10 +162,6 @@ def compute_average_cross_entropy(
 
         for word_id in word_ids[1:]:
             z = model_node.eval(arguments).flatten()
-            # temporary logging as thwere where out of index issues with recent  build !!!!!!!!!!!!!!!!!!!!!
-            if len(z) != 10001:
-                print("len(z) "+str(len(z))+ "word_id="+ str(word_id))
-
             log_p = log_softmax(z, word_id)
             total_cross_entropy -= log_p
             input = C.one_hot([[int(word_id)]], len(word_to_id))
@@ -265,6 +258,7 @@ def print_progress(samples_per_second, model, id_to_word, word_to_id, validation
 
     print("time=%.3f ce=%.3f perplexity=%.3f samples=%d samples/second=%.1f" % (total_time, average_cross_entropy, exp(average_cross_entropy), total_samples, samples_per_second))
 
+    return average_cross_entropy
 
 # Creates and trains an rnn language model.
 def train_lm():
@@ -275,7 +269,6 @@ def train_lm():
 
     # load the data and vocab
     word_sequences, word_to_id, id_to_word, vocab_dim = load_data_and_vocab(training_text_file, word_to_id_file_path)
-    
 
     # Create model nodes for the source and target inputs
     input_sequence, label_sequence = create_inputs(vocab_dim)
@@ -286,15 +279,6 @@ def train_lm():
     # error: this a binary indicator if the model predicts the correct word
     softmax_input, cross_entropy, error = create_model(input_sequence, label_sequence, vocab_dim, hidden_dim)
     
-    # Instantiate the trainer object to drive the model training
-    lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
-    momentum_time_constant = momentum_as_time_constant_schedule(1100)
-    gradient_clipping_with_truncation = True
-    learner = momentum_sgd(softmax_input.parameters, lr_per_sample, momentum_time_constant, True,
-                           gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
-                           gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-    trainer = Trainer(softmax_input, cross_entropy, error, learner)
-
     
     # print out some useful training information
     log_number_of_parameters(softmax_input) ; print()
@@ -302,6 +286,8 @@ def train_lm():
     # Run the training loop
     num_trained_samples = 0
     num_trained_samples_since_last_report = 0
+    min_cross_entropy = 10000
+    learning_rate = start_learning_rate
 
     for epoch_count in range(0, num_epochs):
         num_trained_samples_within_current_epoch = 0
@@ -309,6 +295,15 @@ def train_lm():
 
         # Loop over all sequences training data
         for word_sequence in word_sequences:
+            # Instantiate the trainer object to drive the model training
+            lr_per_sample = learning_rate_schedule(learning_rate, UnitType.sample)
+            momentum_time_constant = momentum_as_time_constant_schedule(1100)
+            gradient_clipping_with_truncation = True
+            learner = momentum_sgd(softmax_input.parameters, lr_per_sample, momentum_time_constant, True,
+                                   gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
+                                   gradient_clipping_with_truncation=gradient_clipping_with_truncation)
+            trainer = Trainer(softmax_input, cross_entropy, error, learner)
+
             t_start = timeit.default_timer()
 
             # get the data for next sequence (=mini batch)
@@ -319,16 +314,20 @@ def train_lm():
             num_trained_samples_within_current_epoch += num_samples
 
             # Specify the mapping of input variables in the model to actual minibatch data to be trained with
-            arguments = ({input_sequence : features, label_sequence : labels})
+            arguments = ({input_sequence : features, label_sequence : labels}, [True])
             trainer.train_minibatch(arguments)
             t_end =  timeit.default_timer()
             samples_per_second = num_samples / (t_end - t_start)
 
             # Print progress report every num_samples_between_progress_report samples
             if num_trained_samples_since_last_report >= num_samples_between_progress_report or num_trained_samples == 0:
-                print_progress(samples_per_second, softmax_input, id_to_word, word_to_id, validation_text_file, vocab_dim, num_trained_samples, t_start)
+                average_cross_entropy = print_progress(samples_per_second, softmax_input, id_to_word, word_to_id, validation_text_file, vocab_dim, num_trained_samples, t_start)
                 num_trained_samples_since_last_report = 0
-
+                if average_cross_entropy < min_cross_entropy:
+                    min_cross_entropy = average_cross_entropy
+                elif average_cross_entropy > min_cross_entropy + 0.2:
+                    learning_rate = learning_rate / 2
+                    print("Udated learning rate to:"+ str(learning_rate))
         # store model for current epoch
         model_filename = "models/lm_epoch%d.dnn" % epoch_count
         softmax_input.save_model(model_filename)
