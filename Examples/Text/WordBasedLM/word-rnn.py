@@ -43,7 +43,7 @@ elif type == 'large':
     softmax_sample_size = 1000
     clipping_threshold_per_sample = 10.0
 
-num_samples_between_progress_report = 100
+num_samples_between_progress_report = 1000
 num_words_to_use_in_progress_print = 50
 
 use_sampled_softmax = True
@@ -166,7 +166,7 @@ def compute_average_cross_entropy(
         for word_id in word_ids[1:]:
             z = model_node.eval(arguments).flatten()
             # temporary logging as thwere where out of index issues with recent  build !!!!!!!!!!!!!!!!!!!!!
-            if len(z) != 1001:
+            if len(z) != 10001:
                 print("len(z) "+str(len(z))+ "word_id="+ str(word_id))
 
             log_p = log_softmax(z, word_id)
