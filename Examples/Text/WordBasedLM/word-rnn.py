@@ -158,12 +158,12 @@ def compute_average_cross_entropy(
     total_cross_entropy = 0.0
     word_count = 0
     for word_sequence in word_sequences:
-        priming_input = C.one_hot([[id_of_sentence_start]], len(word_to_id))
-        arguments = (priming_input, [True])
+        word_ids = [word_to_id[word] for word in word_sequence]
 
-        word_ids = [word_to_id[word] for word in word_sequence[1 : ] ]
+        input = C.one_hot([[word_ids[0]]], len(word_to_id))
+        arguments = (input, [True])
 
-        for word_id in word_ids:
+        for word_id in word_ids[1:]:
             z = model_node.eval(arguments).flatten()
             # temporary logging as thwere where out of index issues with recent  build !!!!!!!!!!!!!!!!!!!!!
             if len(z) != 1001:
@@ -171,10 +171,10 @@ def compute_average_cross_entropy(
 
             log_p = log_softmax(z, word_id)
             total_cross_entropy -= log_p
-            x = C.one_hot([[int(word_id)]], len(word_to_id))
-            arguments = (x, [False])
+            input = C.one_hot([[int(word_id)]], len(word_to_id))
+            arguments = (input, [False])
 
-        word_count += len(word_ids)
+        word_count += len(word_ids) - 1
         if word_count >= num_words_to_use_in_progress_print:
             break
 
