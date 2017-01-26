@@ -82,7 +82,8 @@ namespace CNTK
         BackPropStatePtr Forward(const std::unordered_map<Variable, ValuePtr>& arguments,
                                  std::unordered_map<Variable, ValuePtr>& outputs,
                                  const DeviceDescriptor& computeDevice,
-                                 const std::unordered_set<Variable>& outputsToRetainBackwardStateFor);
+                                 const std::unordered_set<Variable>& outputsToRetainBackwardStateFor,
+                                 const std::unordered_set<Variable>& inputsToExcludeGradientsFor);
 
         virtual BackPropStatePtr Forward(const std::vector<ValuePtr>& /*inputValues*/,
                                          std::unordered_map<Variable, ValuePtr>& /*outputs*/,
@@ -94,7 +95,7 @@ namespace CNTK
 
         virtual std::vector<Variable> InferOutputs() override
         {
-            return m_rootFunction->Outputs();
+            return m_rootFunction->InitOutputs();
         }
 
         virtual void Backward(const BackPropStatePtr& state,
@@ -156,7 +157,7 @@ namespace CNTK
         static void PreorderTraverseVariables(const FunctionPtr& rootFunction, std::unordered_set<FunctionPtr>& visitedFunctions, const FunctionType& functor)
         {
             visitedFunctions.insert(rootFunction);
-            auto rootFunctionOutputs = rootFunction->Outputs();
+            auto rootFunctionOutputs = rootFunction->InitOutputs();
             for (const auto& rootOutput : rootFunctionOutputs)
                 functor(rootOutput);
 
@@ -241,6 +242,7 @@ namespace CNTK
         Microsoft::MSR::CNTK::ComputationNetworkPtr GetComputationNetwork(const DeviceDescriptor& device,
                                                                           const std::unordered_set<Variable>& backpropRoots,
                                                                           const std::unordered_set<Variable>& outputs,
+                                                                          const std::unordered_set<Variable>& inputsToExcludeGradientsFor,
                                                                           bool allocateNetworkMatrices);
 
         template <typename ElementType>
@@ -255,13 +257,15 @@ namespace CNTK
                                                                                   Microsoft::MSR::CNTK::ComputationNetworkPtr& network,
                                                                                   Microsoft::MSR::CNTK::ComputationNetworkBuilder<ElementType>& builder,
                                                                                   std::unordered_map<Variable, Microsoft::MSR::CNTK::ComputationNodeBasePtr>& variableToNodeMap,
-                                                                                  std::unordered_map<Variable, bool>& isVariableRootMap);
+                                                                                  std::unordered_map<Variable, bool>& isVariableRootMap,
+                                                                                  const std::unordered_set<Variable>& inputsToExcludeGradientsFor);
 
         template <typename ElementType>
         static Microsoft::MSR::CNTK::ComputationNodeBasePtr GetNode(const Variable& variable, Microsoft::MSR::CNTK::ComputationNetworkPtr& network,
                                                                     Microsoft::MSR::CNTK::ComputationNetworkBuilder<ElementType>& builder,
                                                                     std::unordered_map<Variable, Microsoft::MSR::CNTK::ComputationNodeBasePtr>& variableToNodeMap,
-                                                                    std::unordered_map<Variable, bool>& isVariableRootMap);
+                                                                    std::unordered_map<Variable, bool>& isVariableRootMap,
+                                                                    const std::unordered_set<Variable>& inputsToExcludeGradientsFor);
 
         template <typename ElementType>
         static void PopulateComputationNodeValue(const std::pair<Variable, ValuePtr>& variableValue, Microsoft::MSR::CNTK::ComputationNodeBasePtr& computationNode, std::unordered_map< Microsoft::MSR::CNTK::MBLayoutPtr, Variable>& layoutsPopulated);
@@ -313,6 +317,8 @@ namespace CNTK
         std::vector<Microsoft::MSR::CNTK::ComputationNodeBasePtr> m_allNetworkRootsInGlobalEvalOrder;
 
         std::unordered_map<Parameter, size_t> m_lastRecordedParameterValueTimeStamps;
+
+        std::unordered_set<Variable> m_inputsExcludedFromGradientComputation;
 
         // Version history:
         // 1 -- initial version.
