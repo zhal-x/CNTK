@@ -1,5 +1,7 @@
 import sys
 import os
+import math
+import functools
 import numpy as np
 
 class WordFreq:
@@ -23,7 +25,13 @@ class Vocabulary:
       self.__dict[word] = WordFreq(word, len(self.__dict), 1)
 
   def build_index(self, max_size):
-    items = sorted(self.__dict.values(), key=lambda it : it.freq, reverse=True)
+    def word_cmp(x, y):
+      if x.freq == y.freq :
+        return (x.word > y.word) - (x.word < y.word)
+      else:
+        return x.freq - y.freq
+
+    items = sorted(self.__dict.values(), key=functools.cmp_to_key(word_cmp), reverse=True)
     if len(items)>max_size:
       del items[max_size:]
     self.size=len(items)
@@ -77,6 +85,14 @@ class Vocabulary:
 
   def __contains__(self, q):
     return q in self.__dict
+  
+  @staticmethod
+  def is_bing_entity(word):
+    return word.startswith('@')
+
+  @staticmethod
+  def is_cnn_entity(word):
+    return word.startswith('@entity') or word.startswith('@placeholder')
 
   @staticmethod
   def load_bingvocab(vocab_src):
@@ -116,14 +132,17 @@ class Vocabulary:
     linenum = 0
     with open(input_src, 'r', encoding='utf-8') as src:
       for line in src.readlines():
+        line = line.strip('\n')
         ans, query_words, context_words = Vocabulary.parse_bing_corpus_line(line)
         for q in query_words:
-          if q.startswith('@'):
+          if Vocabulary.is_cnn_entity(q):
+          #if q.startswith('@'):
             entity_vocab.push(q)
           else:
             word_vocab.push(q)
         for q in context_words:
-          if q.startswith('@'):
+          #if q.startswith('@'):
+          if Vocabulary.is_cnn_entity(q):
             entity_vocab.push(q)
           else:
             word_vocab.push(q)
@@ -159,7 +178,58 @@ class Vocabulary:
     return answer, query_words, context_words
 
   @staticmethod
-  def build_bing_corpus_index(entities, words, corpus, index):
+  def chunk_bing_corpus(input_corpus, chunked_corpus, chunk_size=700, overlap_size=None):
+    """
+    Split long sequences of the input corpus into smaller ones with length less than chunk_size.
+    Args:
+      input_corpus (`str`): The file path of the raw corpus
+      output_corpus (`str`): The file path to store the chunked corpus
+    """
+    seq_id = 0
+    if overlap_size is None:
+      overlap_size = int(chunk_size*6/7)
+    with open(input_corpus, 'r', encoding = 'utf-8') as corp:
+      with open(chunked_corpus, 'w', encoding = 'utf-8') as chunk:
+        for line in corp.readlines():
+          line=line.strip('\n')
+          ans, query_words, context_words = Vocabulary.parse_bing_corpus_line(line)
+          chunked_context = []
+          chunked_freq = []
+          offset = 0
+          max_pos = 0
+          max_cnt = 0
+          total_cnt = 0
+          for w in context_words:
+            if w == ans:
+              total_cnt += 1
+          while offset < len(context_words) and offset >= 0:
+            sub_context = context_words[offset:min(offset+chunk_size, len(context_words))]
+            if (len(sub_context)>overlap_size or len(chunked_context)==0):
+              chunked_context += [sub_context]
+              cnt = 0
+              for w in sub_context:
+                if w == ans:
+                  cnt += 1
+              chunked_freq += [cnt]
+              if cnt > max_cnt:
+                max_cnt = cnt
+                max_pos = len(chunked_context)-1
+            if len(sub_context) < chunk_size:
+              break;
+            offset += len(sub_context) - overlap_size
+          query = ' '.join(query_words)
+          #for seg in chunked_context:
+          #  seg_ctx = ' '.join(seg)
+          #  if ans in seg:
+          seg_ctx = ' '.join(chunked_context[max_pos])
+          line = '\t'.join([query, ans, seg_ctx, str(max_cnt), str(total_cnt)])
+          chunk.write(line + '\r\n')
+          seq_id += 1
+          if seq_id%1000 == 0:
+            print("{0} lines parsed.".format(seq_id))
+
+  @staticmethod
+  def build_bing_corpus_index(entities, words, corpus, index, max_seq_len=100000):
     """
     Build featurized corpus and stored in index file in CNTKTextFormat.
 
@@ -173,27 +243,39 @@ class Vocabulary:
     with open(corpus, 'r', encoding = 'utf-8') as corp:
       with open(index, 'w', encoding = 'utf-8') as index:
         for line in corp.readlines():
+          line = line.strip('\n')
           ans, query_words, context_words = Vocabulary.parse_bing_corpus_line(line)
           ans_item = entities[ans]
           query_ids = []
           context_ids = []
           is_entity = []
+          entity_ids = []
           labels = []
           pos = 0
+          answer_idx = None
           for q in context_words:
-            if q.startswith('@'):
+            if Vocabulary.is_cnn_entity(q):
               item = entities[q]
               context_ids += [ item.id + 1 ]
+              entity_ids += [ item.id + 1 ]
               is_entity += [1]
-              labels += [1 if ans_item.id==item.id else 0]
+              if ans_item.id == item.id:
+                labels += [1] 
+                answer_idx = pos
+              else:
+                labels += [0]
             else:
               item = words[q]
               context_ids += [ (item.id + 1 + entities.size) if item != None else 0 ]
               is_entity += [0]
               labels += [0]
             pos += 1
+            if (pos >= max_seq_len):
+              break
+          if answer_idx is None:
+            continue
           for q in query_words:
-            if q.startswith('@'):
+            if Vocabulary.is_cnn_entity(q):
               item = entities[q]
               query_ids += [ item.id + 1 ]
             else:
@@ -208,6 +290,8 @@ class Vocabulary:
               index.write(" |C {0}:1".format(context_ids[i]))
               index.write(" |E {0}".format(is_entity[i]))
               index.write(" |L {0}".format(labels[i]))
+            if i < len(entity_ids):
+              index.write(" |EID {0}:1".format(entity_ids[i]))
             index.write("\n")
           seq_id += 1
           if seq_id%1000 == 0:
@@ -220,6 +304,7 @@ def load_embedding(embedding_path, vocab_path, dim, init=None):
   item_embedding = [None]*vocab_dim
   with open(embedding_path, 'r') as embedding:
     for line in embedding.readlines():
+      line = line.strip('\n')
       item = line.split(' ')
       if item[0] in word_vocab:
         item_embedding[word_vocab[item[0]].id + entity_size + 1] = np.array(item[1:], dtype="|S").astype(np.float32)
@@ -233,4 +318,3 @@ def load_embedding(embedding_path, vocab_path, dim, init=None):
       else:
         item_embedding[i] = np.array([0]*dim, dtype=np.float32)
   return np.ndarray((vocab_dim, dim), dtype=np.float32, buffer=np.array(item_embedding))
-

@@ -21,7 +21,6 @@ from datetime import datetime
 import math
 import cntk.io as io
 import cntk.cntk_py as cntk_py
-import ReasoNet.utils as rs_utils
 
 ########################
 # variables and stuff  #
@@ -36,7 +35,6 @@ import ReasoNet.utils as rs_utils
 
 # stabilizer
 #cntk_py.disable_forward_values_sharing() 
-#cntk_py.set_computation_network_trace_level(1)
 stabilize = Stabilizer()
 if not os.path.exists("model"):
   os.mkdir("model")
@@ -68,7 +66,123 @@ def create_reader(path, vocab_dim, entity_dim, randomize, rand_size= io.DEFAULT_
     )), randomize=randomize)
   #, randomization_window = rand_size)
 
-def bidirectionalLSTM(hidden_dim, x, splice_outputs=True, init = init_default_or_glorot_uniform):
+def text_convolution(win_size, in_dim, out_dim):
+  #activation = _resolve_activation(activation)
+  output_channels_shape = _as_tuple(out_dim)
+  output_rank = len(output_channels_shape)
+  filter_shape = (win_size, in_dim)
+  filter_rank = len(filter_shape)
+  kernel_shape = _INFERRED + filter_shape # kernel := filter plus reductionDims
+
+  # parameters bound to this Function
+  init_kernel = glorot_uniform(filter_rank=filter_rank, output_rank=1)
+  #init_kernel = _initializer_for(init, Record(filter_rank=filter_rank, output_rank=-1))
+  # BUGBUG: It is very confusing that output_rank is negative, esp. since that means count from the start. Solution: add a flag
+  W = Parameter(output_channels_shape + kernel_shape,             init=init_kernel, name='W')                   # (K, C, H, W) aka [ W x H x C x K ]
+  #w = np.reshape(np.array([[[[2, -1, 0, -1, 2],[1,1,2,-1,-1],[1,2,0,2,1]]]], dtype = np.float32), (1, 1, 3, 5))
+  #W = constant(value=w)
+  #b = Parameter(output_channels_shape + (1,) * len(filter_shape), init=init_bias,   name='b') if bias else None # (K,    1, 1) aka [ 1 x 1 x     K ]
+
+  # expression
+  x = Placeholder(name='convolution_arg')
+  # TODO: update the parameter order of convolution() to match the optional ones as in here? (options order matches Keras)
+  strides = (1, 1, in_dim)
+
+  apply_x = convolution (W, x,
+                         strides = _as_tuple(strides),
+                         sharing = _as_tuple(True),
+                         auto_padding = _as_tuple(False),
+                         lower_pad = (0, win_size/2, 0),
+                         upper_pad = (0, (win_size-1)/2, 0)
+                         )
+#                         # TODO: can we rename auto_padding to pad?
+  #if bias:
+  #    apply_x = apply_x + b
+  apply_x = apply_x >> sigmoid
+  return Block(apply_x, 'Convolution', Record(W=W))
+
+  ########################
+# define the model     #
+########################
+
+def gru_cell_opt(shape, init=init_default_or_glorot_uniform, name=''): # (x, (h,c))
+  shape = _as_tuple(shape)
+
+  if len(shape) != 1 :
+    raise ValueError("gru_cell: shape must be vectors (rank-1 tensors)")
+
+  # determine stacking dimensions
+  cell_shape_stacked = shape * 2  # patched dims with stack_axis duplicated 4 times
+
+  # parameters
+  Wz = Parameter(cell_shape_stacked, init = init, name='Wz')
+  Wr = Parameter(cell_shape_stacked, init = init, name='Wr')
+  Wh = Parameter(cell_shape_stacked, init = init, name='Wh')
+  #Uz = Parameter( _INFERRED + shape, init = init, name = 'Uz')
+  #Ur = Parameter( _INFERRED + shape, init = init, name = 'Ur')
+  #Uh = Parameter( _INFERRED + shape, init = init, name = 'Uh')
+  U = Parameter( _INFERRED + (shape[0]*3,), init = init, name = 'Uzrh')
+
+  def create_s_placeholder():
+    # we pass the known dimensions here, which makes dimension inference easier
+    return Placeholder(shape=shape, name='S') # (h, c)
+
+  # parameters to model function
+  x = Placeholder(name='gru_block_arg')
+  prev_status = create_s_placeholder()
+
+  # formula of model function
+  Sn_1 = prev_status
+
+  xU = times(x, U, name='x*Uzrh')
+  xUz = ops.slice(xU, -1, 0, shape[0], name='x*Uz')
+  xUr = ops.slice(xU, -1, shape[0], shape[0]*2, name='x*Ur')
+  xUh = ops.slice(xU, -1, shape[0]*2, shape[0]*3, name='x*Uh')
+  z = sigmoid(xUz + times(Sn_1, Wz, name='h[-1]*Wz'), name='z')
+  r = sigmoid(xUr + times(Sn_1, Wr, name='h[-1]*Wr'), name='r')
+  h = tanh(xUh + times(element_times(Sn_1, r, name='h[-1]@r'), Wh, name='Wh*(h[-1]@r)'), name='h')
+  s = plus(element_times((1-z), h, name='(1-z)@h'), element_times(z, Sn_1, name='z@[h-1]'), name=name)
+  apply_x_s = combine([s])
+  apply_x_s.create_placeholder = create_s_placeholder
+  return apply_x_s
+
+def gru_cell(shape, init=init_default_or_glorot_uniform, name=''): # (x, (h,c))
+  shape = _as_tuple(shape)
+
+  if len(shape) != 1 :
+    raise ValueError("gru_cell: shape must be vectors (rank-1 tensors)")
+
+  # determine stacking dimensions
+  cell_shape_stacked = shape * 2  # patched dims with stack_axis duplicated 4 times
+
+  # parameters
+  Wz = Parameter(cell_shape_stacked, init = init, name='Wz')
+  Wr = Parameter(cell_shape_stacked, init = init, name='Wr')
+  Wh = Parameter(cell_shape_stacked, init = init, name='Wh')
+  Uz = Parameter( _INFERRED + shape, init = init, name = 'Uz')
+  Ur = Parameter( _INFERRED + shape, init = init, name = 'Ur')
+  Uh = Parameter( _INFERRED + shape, init = init, name = 'Uh')
+
+  def create_s_placeholder():
+    # we pass the known dimensions here, which makes dimension inference easier
+    return Placeholder(shape=shape, name='S') # (h, c)
+
+  # parameters to model function
+  x = Placeholder(name='gru_block_arg')
+  prev_status = create_s_placeholder()
+
+  # formula of model function
+  Sn_1 = prev_status
+
+  z = sigmoid(times(x, Uz, name='x*Uz') + times(Sn_1, Wz, name='Sprev*Wz'), name='z')
+  r = sigmoid(times(x, Ur, name='x*Ur') + times(Sn_1, Wr, name='Sprev*Wr'), name='r')
+  h = tanh(times(x, Uh, name='x*Uh') + times(element_times(Sn_1, r, name='Sprev*r'), Wh), name='h')
+  s = plus(element_times((1-z), h, name='(1-z)*h'), element_times(z, Sn_1, name='z*SPrev'), name=name)
+  apply_x_s = combine([s])
+  apply_x_s.create_placeholder = create_s_placeholder
+  return apply_x_s
+
+def bidirectionalLSTM(hidden_dim, x, splice_outputs=True):
   bwd = Recurrence(LSTM(hidden_dim), go_backwards=True ) (stabilize(x))
   if splice_outputs:
     # splice the outputs together
@@ -78,8 +192,19 @@ def bidirectionalLSTM(hidden_dim, x, splice_outputs=True, init = init_default_or
     # return both (in cases where we want the 'final' hidden status)
     return (fwd, bwd)
 
-def bidirectional_gru(hidden_dim, x, splice_outputs=True, name='', init = init_default_or_glorot_uniform):
-  W = Parameter(_INFERRED +  _as_tuple(hidden_dim), init=init, name='gru_params')
+def bidirectional_gru2(hidden_dim, x, splice_outputs=True, name=''):
+  fwd = Recurrence(gru_cell(hidden_dim), go_backwards=False) (stabilize(x))
+  bwd = Recurrence(gru_cell(hidden_dim), go_backwards=True) (stabilize(x))
+  if splice_outputs:
+    # splice the outputs together
+    hc = splice((fwd, bwd), name=name)
+    return hc
+  else:
+    # return both (in cases where we want the 'final' hidden status)
+    return (fwd, bwd)
+
+def bidirectional_gru(hidden_dim, x, splice_outputs=True, name=''):
+  W = Parameter(_INFERRED +  _as_tuple(hidden_dim), init=glorot_uniform(), name='gru_params')
   dualstatus = ops.optimized_rnnstack(x, W, hidden_dim, 1, True, recurrent_op='gru', name=name)
   if splice_outputs:
     # splice the outputs together
@@ -87,6 +212,39 @@ def bidirectional_gru(hidden_dim, x, splice_outputs=True, name='', init = init_d
   else:
     # return both (in cases where we want the 'final' hidden status)
     return (ops.slice(sequence.last(dualstatus), -1, 0, hidden_dim, name='fwd'), ops.slice(sequence.first(dualstatus), -1, hidden_dim, hidden_dim*2, name='bwd'), dualstatus) 
+
+def broadcast_as(op, seq_op, name=''):
+  x=placeholder_variable(shape=op.shape, name='src_op')
+  s=placeholder_variable(shape=seq_op.shape, name='tgt_seq')
+  pd = sequence.scatter(x, sequence.is_first(s, name='isf_1'), name='sct')
+  pout = placeholder_variable(op.shape, dynamic_axes=seq_op.dynamic_axes, name='pout')
+  out = element_select(sequence.is_first(s, name='isf_2'), pd, past_value(pout, name='ptv'), name='br_sel')
+  rlt = out.replace_placeholders({pout:sanitize_input(out), x:sanitize_input(op), s:sanitize_input(seq_op)})
+  return combine([rlt], name=name)
+
+def cosine_similarity(src, tgt, name=''):
+  src_dup = False
+  if True:
+  #if len(src.dynamic_axes)>0 and src.dynamic_axes[0].name=='defaultBatchAxis':
+    src_br = sequence.broadcast_as(src, tgt, name='cos_br')
+    src_dup = True
+  else:
+    src_br = src
+  sim = cosine_distance(src_br, tgt, name)
+  return sim
+
+def project_cosine_sim(status, memory, dim, init = init_default_or_glorot_uniform, name=''):
+  cell_shape = (dim, dim)
+  Wi = Parameter(cell_shape, init = init, name='Wi')
+  Wm = Parameter(cell_shape, init = init, name='Wm')
+  weighted_status = times(status, Wi, name = 'project_status')
+  weighted_memory = times(memory, Wm, name = 'project_memory')
+  return cosine_similarity(weighted_status, weighted_memory, name=name)
+
+def termination_gate(status, dim, init = init_default_or_glorot_uniform, name=''):
+  Wt = Parameter((dim, 1), init = init, name='Wt')
+  return sigmoid(times(status, Wt), name=name)
+  #return times(status, Wt, name=name)
 
 def seq_max(x):
   m = placeholder_variable(shape=(1,), dynamic_axes = x.dynamic_axes, name='max')
@@ -98,31 +256,29 @@ def seq_max(x):
   max_br = max_seq.replace_placeholders({pv:utils.sanitize_input(max_seq)})
   return utils.sanitize_input(max_br)
 
-def attention_module(context_memory, query_memory, entity_memory, init_status, hidden_dim, init = init_default_or_glorot_uniform):
-  e_mem = ops.placeholder_variable(shape=entity_memory.shape, dynamic_axes=entity_memory.dynamic_axes, name='e_mem')
-  c_mem = ops.placeholder_variable(shape=context_memory.shape, dynamic_axes=context_memory.dynamic_axes, name='c_mem')
-  i_status = ops.placeholder_variable(shape=(hidden_dim), name='init_status')
-  att = ops.times_transpose(c_mem, sequence.broadcast_as(i_status, c_mem))
-  att_exp = ops.exp(10*(att-seq_max(att)))
-  attention = att_exp/sequence.broadcast_as(sequence.reduce_sum(att_exp), att_exp)
-  block_func = ops.as_block(attention, [(c_mem, ops.sanitize_input(context_memory)), (i_status, ops.sanitize_input(init_status))], 'Attention_module', 'Attention_module')
-  return block_func
-
-def create_constant_embedding(vocab_dim, embedding_dim):
-  scale = math.sqrt(6/(vocab_dim+embedding_dim))*2
-  rand = rs_utils.uniform_initializer(scale, -scale/2)
-  embedding = [None]*vocab_dim
-  for i in range(vocab_dim):
-    embedding[i] = rand.next(embedding_dim)
-  return np.ndarray((vocab_dim, embedding_dim), dtype=np.float32, buffer=np.array(embedding))
+def attention_rlunit(context_memory, query_memory, entity_memory, hidden_dim, init = init_default_or_glorot_uniform):
+  status = Placeholder(name='status', shape=hidden_dim)
+  context_attention_weight = project_cosine_sim(status, context_memory, hidden_dim, name='context_attention')
+  query_attention_weight = project_cosine_sim(status, query_memory, hidden_dim, name='query_attetion')
+  context_attention = sequence.reduce_sum(times(context_attention_weight, context_memory), name='C-Att')
+  query_attention = sequence.reduce_sum(times(query_attention_weight, query_memory), name='Q-Att')
+  attention = splice((query_attention, context_attention), name='att-sp')
+  gru = gru_cell((hidden_dim, ), name='control_status')
+  new_status = gru(attention, status).output
+  termination_prob = termination_gate(new_status, dim=hidden_dim, name='terminate_prob')
+  ans_attention = project_cosine_sim(new_status, entity_memory, hidden_dim, name='ans_attention')
+  softmax_norm = True
+  if softmax_norm:
+    #max_ans = sequence.broadcast_as(seq_max(ans_attention), ans_attention)
+    #ans_exp = ops.exp(ans_attention*10)
+    #max_ans = seq_max(ans_attention)
+    ans_exp = ops.exp(ans_attention*10)
+    ans_attention = element_divide(ans_exp, sequence.broadcast_as(sequence.reduce_sum(ans_exp), ans_exp), name='norm_ans')
+  return combine([ans_attention, termination_prob, new_status], name='ReinforcementAttention')
 
 #
 # TODO: CNTK current will convert sparse variable to dense after reshape function
-def create_model(vocab_dim, entity_dim, hidden_dim,  embedding_init=None,  embedding_dim=100, dropout_rate=None, init = init_default_or_glorot_uniform, model_name='asr'):
-  global log_name
-  if model_name is not None:
-    log_name = model_name+'_log'
-  log("Create model: dropout_rate: {0}, init:{1}, embedding_init: {2}".format(dropout_rate, init, embedding_init))
+def create_model(vocab_dim, entity_dim, hidden_dim,  embedding_init=None,  embedding_dim=100, max_rl_iter=5, init=init_default_or_glorot_uniform):
   # Query and Doc/Context/Paragraph inputs to the model
   batch_axis = Axis.default_batch_axis()
   query_seq_axis = Axis('sourceAxis')
@@ -135,37 +291,59 @@ def create_model(vocab_dim, entity_dim, hidden_dim,  embedding_init=None,  embed
   entity_ids_mask = input_variable(shape=(1,), is_sparse=False, dynamic_axes=context_dynamic_axes, name='entities')
   # embedding
   if embedding_init is None:
-    embedding = Parameter(shape=(vocab_dim, embedding_dim), init=uniform(0.2))
-    embedding_matrix = constant(create_constant_embedding(vocab_dim, embedding_dim), shape=(vocab_dim, embedding_dim))
+    embedding = parameter(shape=(vocab_dim, embedding_dim), init=uniform(math.sqrt(6/(vocab_dim+embedding_dim))))
   else:
     embedding = parameter(shape=(vocab_dim, embedding_dim), init=None)
     embedding.value = embedding_init
-    embedding_matrix = constant(embedding_init, shape=(vocab_dim, embedding_dim))
 
   # TODO: Add dropout to embedding
-  if dropout_rate is not None:
-    query_embedding  = ops.dropout(times(query_sequence , embedding), dropout_rate, name='query_embedding')
-    context_embedding = ops.dropout(times(context_sequence, embedding), dropout_rate, name='context_embedding')
-  else:
-    query_embedding  = times(query_sequence , embedding, name='query_embedding')
-    context_embedding = times(context_sequence, embedding, name='context_embedding')
-  
-  entity_embedding = ops.times(context_sequence, embedding_matrix, name='constant_entity_embedding')
-  mask_embedding = ops.element_select(entity_ids_mask, entity_embedding, context_embedding)
-  #mask_embedding = context_embedding
+  query_embedding  = ops.dropout(times(query_sequence , embedding), 0.2, name='query_embedding')
+  context_embedding = ops.dropout(times(context_sequence, embedding), 0.2, name='context_embedding')
+
   # get source and context representations
-  context_memory = bidirectional_gru(hidden_dim, mask_embedding, name='Context_Mem', init=init)            # shape=(hidden_dim*2, *), *=context_seq_axis
-  #context_memory = bidirectional_gru(hidden_dim, context_embedding, name='Context_Mem', init=init)            # shape=(hidden_dim*2, *), *=context_seq_axis
+  context_memory = bidirectional_gru(hidden_dim, context_embedding, name='Context_Mem')            # shape=(hidden_dim*2, *), *=context_seq_axis
   entity_condition = greater(entity_ids_mask, 0, name='condidion')
   entities_all = sequence.gather(entity_condition, entity_condition, name='entities_all')
   entity_memory = sequence.gather(context_memory, entity_condition, name='Candidate_Mem')
   entity_ids = input_variable(shape=(entity_dim), is_sparse=True, dynamic_axes=entity_memory.dynamic_axes, name='entity_ids')
   #entity_memory = sequence.scatter(sequence.gather(context_memory, entity_condition, name='Candidate_Mem'), entities_all)
-  qfwd, qbwd, query_memory  = bidirectional_gru(hidden_dim, query_embedding, splice_outputs=False, name='Query_Mem', init=init) # shape=(hidden_dim*2, *), *=query_seq_axis
+  qfwd, qbwd, query_memory  = bidirectional_gru(hidden_dim, query_embedding, splice_outputs=False, name='Query_Mem') # shape=(hidden_dim*2, *), *=query_seq_axis
   init_status = splice((qfwd, qbwd), name='Init_Status') # get last fwd status and first bwd status
-  result = attention_module(context_memory, query_memory, entity_memory, init_status, hidden_dim*2)
-  ans_prob = sequence.gather(ops.sanitize_input(result), entity_condition, name='Final_Ans')
-  return Block(ans_prob, 'ReasoNet', members = Record(vocab_dim=vocab_dim, hidden_dim=hidden_dim, context=context_sequence,
+  attention_rlu = attention_rlunit(context_memory, query_memory, entity_memory, hidden_dim*2, init)
+  status_controls = [None]*(max_rl_iter*2)
+  arlus = [None] * max_rl_iter
+  answers = None
+  probs = None
+  term_prob_max = None
+  for i in range(0, max_rl_iter):
+    if i == 0:
+      arlus[i] = attention_rlu(init_status)
+      term_prob_max = arlus[i].outputs[1]
+    else:
+      arlus[i] = attention_rlu(arlus[i-1].outputs[2])
+      term_prob_max = ops.element_select(ops.greater(arlus[i].outputs[1], term_prob_max), arlus[i].outputs[1], term_prob_max)
+  for i in range(0, max_rl_iter):
+    #term_prob_exp = ops.exp(arlus[i].outputs[1]*10)
+    term_prob_exp = ops.exp(arlus[i].outputs[1]*10)
+    step_ans = element_times(arlus[i].outputs[0], sequence.broadcast_as(term_prob_exp, arlus[i].outputs[0]))
+    status_controls[2*i] = step_ans
+    status_controls[2*i+1] = term_prob_exp
+    if answers is None:
+      answers = step_ans
+      probs = term_prob_exp
+    else:
+      answers += step_ans
+      probs += term_prob_exp
+  #final_answers = reshape(element_divide(answers, probs), (1,), name='final_answers')
+  prob_sum = sequence.broadcast_as(probs, answers)
+  final_answers = reshape(element_divide(answers, prob_sum), (1,), name='final_answers')
+  for i in range(0, max_rl_iter):
+    status_controls[i*2+1] = reshape(element_divide(status_controls[i*2+1], probs), (1,))
+    status_controls[i*2] = reshape(element_divide(status_controls[i*2], prob_sum),(1,))
+
+  #result = combine([final_answers], name='ReasoNet')
+  result = combine(status_controls+[final_answers], name='ReasoNet')
+  return Block(result, 'ReasoNet', Record(vocab_dim=vocab_dim, hidden_dim=hidden_dim, max_iter =max_rl_iter, context=context_sequence,
     query=query_sequence, entities=entity_ids_mask, entity_condition=entity_condition,
     entities_all=entities_all, entity_ids=entity_ids, entity_dim=entity_dim))
 
@@ -199,12 +377,77 @@ def accuracy_func(pred, label, name='accuracy'):
   acc = ops.times_transpose(pred_max, norm_label, name='accuracy')
   return acc
 
-def softmax_cross_entropy(pred, label, mask, gama=10, name=''):
+def seq_accuracy(pred, label, name=''):
+  m = placeholder_variable(shape=(1,), dynamic_axes = pred.dynamic_axes, name='max')
+  o = element_select(greater(pred, past_value(m)), pred, past_value(m))
+  rlt = o.replace_placeholders({m:sanitize_input(o)})
+  max_val = sequence.broadcast_as(sequence.last(rlt), rlt)
+  first_max = sequence.first(sequence.where(ops.greater_equal(pred, max_val)))
+  label_idx = sequence.first(sequence.where(ops.equal(label, 1), name='Label_idx'))
+  return ops.equal(first_max, label_idx, name=name)
+
+def seq_cross_entropy(pred, label, gama=10, name=''):
+  #loss = ops.negate(sequence.reduce_sum(times(label, ops.log(pred_exp/(sequence.broadcast_as(sum_exp, pred))))), name = name)
+  pred_exp = ops.exp(pred*gama, name='pred_exp')
+  sum_exp = sequence.reduce_sum(pred_exp, name='sum_exp')
+  pred_prob = element_divide(pred_exp, sequence.broadcast_as(sum_exp, pred), name='prob')
+  log_prob = ops.log(pred_prob, name='log_prob')
+  label_softmax = ops.element_times(label, log_prob, name = 'label_softmax')
+  entropy = ops.negate(sequence.reduce_sum(label_softmax), name=name)
+  return entropy
+
+def mask_cross_entropy(pred, label, mask, gama=10, name=''):
+  pred_exp = element_select(mask, ops.exp(gama*pred), 0)
+  label_msk = element_select(label, 1, 0)
+  sum_exp = ops.reduce_sum(pred_exp)
+  soft_max = ops.element_select(mask, ops.negate(ops.element_times(label_msk, ops.log(pred_exp/sum_exp))), 0)
+  return ops.reduce_sum(soft_max, name=name)
+
+def softmax_cross_entropy(pred, label, gama=10, name=''):
   pred_exp = ops.exp(gama*pred)
   #pred_exp = ops.exp(gama*(pred-ops.reduce_max(pred)))
-  sum_exp = ops.reduce_sum(element_times(pred_exp, mask))
+  sum_exp = ops.reduce_sum(pred_exp)
   soft_max = ops.negate(ops.element_times(label, ops.log(pred_exp/sum_exp)))
   return ops.reduce_sum(soft_max, name=name)
+
+def contractive_reward(model):
+  model_args = {arg.name:arg for arg in model.arguments}
+  context = model_args['context']
+  entities = model_args['entities']
+  wordvocab_dim = model.vocab_dim
+  labels_raw = input_variable(shape=(1,), is_sparse=False, dynamic_axes=context.dynamic_axes, name='labels')
+  entity_condition = model.entity_condition
+  entities_all = model.entities_all
+  answers = model.outputs[-1]
+  labels = sequence.gather(labels_raw, entity_condition, name='EntityLabels')
+  entity_ids = model.entity_ids
+  entity_dim = model.entity_dim
+  entity_id_matrix = ops.reshape(entity_ids, entity_dim)
+  expand_pred = sequence.reduce_sum(element_times(answers, entity_id_matrix))
+  expand_label = ops.greater_equal(sequence.reduce_sum(element_times(labels, entity_id_matrix)), 1)
+  max_rl_iter = int((len(model.outputs)-1)/2)
+  base = None
+  reward = [None]*max_rl_iter
+  for i in range(0, max_rl_iter):
+    if i == 0:
+      base = model.outputs[i*2]
+    else:
+      base += model.outputs[i*2]
+  reward_sum = None
+  reward_exp = [None]*max_rl_iter
+  base_sum = ops.times_transpose(sequence.reduce_sum(element_times(reshape(base, (1, )), entity_id_matrix)), expand_label)
+  for i in range(0, max_rl_iter):
+    reward[i] = ops.log(model.outputs[i*2+1])*ops.exp(ops.times_transpose(sequence.reduce_sum(element_times(reshape(model.outputs[i*2], (1,)), entity_id_matrix)), expand_label)/base_sum - 1)
+    if i == 0:
+      reward_sum = reward[i]
+    else:
+      reward_sum += reward[i]
+  #cross_entroy = softmax_cross_entropy(expand_pred, expand_label, name='CrossEntropy')
+  accuracy = accuracy_func(expand_pred, expand_label, name='accuracy')
+  #apply_loss = combine([cross_entroy, answers, labels, accuracy])
+  #apply_loss = combine([cross_entroy, answers, labels, reward_sum])
+  apply_loss = combine([reward_sum, answers, labels, accuracy])
+  return Block(apply_loss, 'AvgSoftMaxCrossEntropy', Record(labels=labels_raw))
 
 def loss(model):
   model_args = {arg.name:arg for arg in model.arguments}
@@ -218,35 +461,12 @@ def loss(model):
   labels = sequence.gather(labels_raw, entity_condition, name='EntityLabels')
   entity_ids = model.entity_ids
   entity_dim = model.entity_dim
-  entities_all = model.entities_all
   entity_id_matrix = ops.reshape(entity_ids, entity_dim)
   expand_pred = sequence.reduce_sum(element_times(answers, entity_id_matrix))
   expand_label = ops.greater_equal(sequence.reduce_sum(element_times(labels, entity_id_matrix)), 1)
-  expand_candidate_mask = ops.greater_equal(sequence.reduce_sum(entity_id_matrix), 1)
-  cross_entroy = softmax_cross_entropy(expand_pred, expand_label, expand_candidate_mask, gama=10, name='CrossEntropy')
+  cross_entroy = softmax_cross_entropy(expand_pred, expand_label, name='CrossEntropy')
   accuracy = accuracy_func(expand_pred, expand_label, name='accuracy')
   apply_loss = combine([cross_entroy, answers, labels, accuracy])
-  return Block(apply_loss, 'AvgSoftMaxCrossEntropy', Record(labels=labels_raw))
-
-def loss2(model):
-  model_args = {arg.name:arg for arg in model.arguments}
-  context = model_args['context']
-  entities = model_args['entities']
-  wordvocab_dim = model.vocab_dim
-  labels_raw = input_variable(shape=(1,), is_sparse=False, dynamic_axes=context.dynamic_axes, name='labels')
-  entity_condition = model.entity_condition
-  entities_all = model.entities_all
-  answers = model.outputs[-1]
-  labels = sequence.gather(labels_raw, entity_condition, name='EntityLabels')
-  entity_ids = model.entity_ids
-  entity_dim = model.entity_dim
-  entity_id_matrix = ops.reshape(entity_ids, entity_dim)
-  expand_pred = sequence.reduce_sum(element_times(answers, entity_id_matrix)) + 0.0000001
-  expand_label = ops.greater_equal(sequence.reduce_sum(element_times(labels, entity_id_matrix)), 1)
-  cross_entropy = ops.negate(ops.reduce_sum(ops.element_times(expand_label, ops.log(expand_pred))))
-  #cross_entroy = softmax_cross_entropy(expand_pred, expand_label, name='CrossEntropy')
-  accuracy = accuracy_func(expand_pred, expand_label, name='accuracy')
-  apply_loss = combine([cross_entropy, answers, labels, accuracy])
   return Block(apply_loss, 'AvgSoftMaxCrossEntropy', Record(labels=labels_raw))
 
 def bind_data(func, data):
@@ -291,12 +511,12 @@ def evaluation(trainer, data, bind, minibatch_size, epoch_size):
 def train(model, train_data, max_epochs=1, save_model_flag=False, epoch_size=270000, model_name='rsn', eval_data=None, eval_size=None, check_point_freq=0.1):
   # Criterion nodes
   global log_name
-  if model_name is not None:
-    log_name = model_name+'_log'
   #criterion_loss = contractive_reward(model)
   criterion_loss = loss(model)
   loss_func = criterion_loss.outputs[0]
   eval_func = criterion_loss.outputs[-1]
+  if model_name is not None:
+    log_name = model_name+'_log'
 
   def create_sgd_learner(ep_size, mb_size):
     schedule_unit=int(ep_size*0.1/mb_size)
@@ -330,17 +550,13 @@ def train(model, train_data, max_epochs=1, save_model_flag=False, epoch_size=270
     return lr
 
   def create_adam_learner(ep_size, mb_size):
-    #learning_rate = 0.0005
-    #learning_rate = 0.00005
-    learning_rate = 0.0001
-    lr_schedule = learner.learning_rate_schedule(learning_rate, learner.UnitType.sample)
-    momentum = learner.momentum_schedule(0.90)
+    learning_rate = 0.0005
+    lr_schedule = learner.learning_rate_schedule(learning_rate, learner.UnitType.minibatch, 1)
+    momentum = learner.momentum_schedule(0.9)
     clipping_threshold_per_sample = 10
-    #clipping_threshold_per_sample = 10/32
-    #gradient_clipping_with_truncation = False
-    gradient_clipping_with_truncation = True
+    gradient_clipping_with_truncation = False
     momentum_var = learner.momentum_schedule(0.999)
-    lr = learner.adam_sgd(model.parameters, lr_schedule, momentum, True, momentum_var,
+    lr = learner.adam_sgd(model.parameters, lr_schedule, momentum, momentum_var,
             gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
             gradient_clipping_with_truncation=gradient_clipping_with_truncation)
     learner_desc = 'Alg: Adam, learning rage: {0}, momentum: {1}, gradient clip: {2}'.format(learning_rate, momentum[0], clipping_threshold_per_sample)
@@ -364,13 +580,11 @@ def train(model, train_data, max_epochs=1, save_model_flag=False, epoch_size=270
   # Instantiate the trainer object to drive the model training
   #learn = learner.adagrad(model.parameters, lr_schedule, gradient_clipping_threshold_per_sample = clipping_threshold_per_sample, gradient_clipping_with_truncation = gradient_clipping_with_truncation)
   minibatch_size = 24000
-  #minibatch_size = 30000
-  #minibatch_size = 40000
-  #minibatch_size = 20000
   lr = create_adam_learner(epoch_size, minibatch_size)
   #lr = create_momentum_learner(epoch_size, minibatch_size)
   #lr = create_nesterov_learner(epoch_size, minibatch_size)
   #lr = create_sgd_learner(epoch_size, minibatch_size)
+
   trainer = Trainer(model.outputs[-1], loss_func, eval_func, lr)
   # Get minibatches of sequences to train with and perform model training
   # bind inputs to data from readers
