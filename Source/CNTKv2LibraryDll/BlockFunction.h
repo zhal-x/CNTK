@@ -131,7 +131,7 @@ namespace CNTK
             return blockFunctionInputs;
         }
 
-        void InferOutputs(std::vector<Variable>& outputs) override
+        virtual std::vector<Variable> InferOutputs() override
         {
             // We determine the outputs by replacing the arguments of the composite with new placeholders with updated 
             // shape etc. information matching the corresponding mapped input
