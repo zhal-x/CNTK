@@ -4067,6 +4067,49 @@ namespace CNTK
         return CreateCompositeMinibatchSource(minibatchSourceConfiguration);
     }
 
+    /// 
+    /// Encapsulates all the different transforms that can be applied to an image
+    /// 
+    class ImageTransform
+    {
+        Dictionary m_atrributes;
+
+        void AddConfig(const wchar_t* key, const DictionaryValue& value);
+
+        template<typename... Args>
+        void AddConfig(const wchar_t* key, const DictionaryValue& value, Args... args);
+
+        ImageTransform() {};
+
+    public:
+        /// 
+        /// Create a crop transform with the specified options
+        /// 
+        CNTK_API static ImageTransform Crop(const wchar_t* cropType = L"center",
+            int cropSize = 0, float sideRatio = 0.0f, float areaRatio = 0.0f,
+            float aspectRatio = 1.0f, const wchar_t* jitterType = L"none");
+
+        /// 
+        /// Create a scale transform with the specified options
+        /// 
+        CNTK_API static ImageTransform Scale(int width,
+            int height, int channels, const wchar_t* interpolations = L"linear",
+            const wchar_t* scaleMode = L"fill", int padValue = -1);
+
+        /// 
+        /// Create a mean subtraction transform with the specified options
+        /// 
+        CNTK_API static ImageTransform Mean(const wchar_t* meanFile);
+
+        /// 
+        /// Create a color transform with the specified options
+        /// 
+        CNTK_API static ImageTransform Color(float brightnessRadius = 0.0f,
+            float contrastRadius = 0.0f, float saturationRadius = 0.0f);
+    };
+
+
+
     ///
     /// Compute the per dimension means and variances for each of the specified streams using data from the specified minibatchSource.
     ///

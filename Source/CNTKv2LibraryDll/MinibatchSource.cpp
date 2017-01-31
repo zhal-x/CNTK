@@ -328,4 +328,64 @@ namespace CNTK
         auto checkpointedMinibatchSourcePosition = checkpoint[PositionAttributeName].Value<size_t>();
         m_shim->SetCurrentSamplePosition(checkpointedMinibatchSourcePosition);
     }
+
+    void ImageTransform::AddConfig(const wchar_t* key, const DictionaryValue& value)
+    {
+        m_atrributes[key] = value;
+    }
+
+    template<typename... Args>
+    void ImageTransform::AddConfig(const wchar_t* key, const DictionaryValue& value, Args... args)
+    {
+        AddConfig(key, value); //insert one entry
+        AddConfig(args...); //recurse
+    }
+
+    /* static */ ImageTransform ImageTransform::Crop(const wchar_t* cropType,
+            int cropSize, float sideRatio, float areaRatio,
+            float aspectRatio, const wchar_t* jitterType)
+    {
+        ImageTransform crop;
+        crop.AddConfig(L"type", L"Crop",
+            L"cropType", cropType,
+            L"cropSize", cropSize,
+            L"sideRatio", sideRatio,
+            L"areaRatio", areaRatio,
+            L"aspectRatio", aspectRatio,
+            L"jitterType", jitterType);
+        return crop;
+    }
+
+    /* static */ ImageTransform ImageTransform::Scale(int width,
+            int height, int channels, const wchar_t* interpolations,
+            const wchar_t* scaleMode, int padValue)
+    {
+        ImageTransform scale;
+        scale.AddConfig(L"type", L"Scale",
+            L"width", width,
+            L"height", height,
+            L"channels", channels,
+            L"interpolations", interpolations,
+            L"scaleMode", scaleMode,
+            L"padValue", padValue);
+        return scale;
+    }
+
+    /* static */ ImageTransform ImageTransform::Mean(const wchar_t* meanFile)
+    {
+        ImageTransform mean;
+        mean.AddConfig(L"type", L"Mean", L"meanFile", meanFile);
+        return mean;
+    }
+
+    /* static */ ImageTransform ImageTransform::Color(float brightnessRadius,
+            float contrastRadius, float saturationRadius)
+    {
+        ImageTransform color;
+        color.AddConfig(L"type", L"Color",
+            L"brightnessRadius", brightnessRadius,
+            L"contrastRadius", contrastRadius,
+            L"saturationRadius", saturationRadius);
+        return color;
+    }
 }
