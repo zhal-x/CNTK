@@ -354,22 +354,8 @@ private:
             assert(numNodesHeadersReceivedFrom == (NumProc() - 1));
         }
 
-        // Initiate receive of the aggregate header
-        MPI_Request recvAggHeaderRequest;
-        if (!m_mpi->IsMainNode())
-            MPI_Irecv(headerCPU, headerCPU->Size(), MPI_CHAR, m_mpi->MainNodeRank(), numGradMatrices + 1 + numGradMatrices, m_mpi->Communicator(), &recvAggHeaderRequest) || MpiFail("MPI_Irecv");
-
-        // Intiate send of the aggregate header from main node
-        std::vector<MPI_Request> sendAggHeaderRequests(NumProc() - 1);
-        if (m_mpi->IsMainNode())
-        {
-            for (size_t j = 0; j < NumProc() - 1; ++j)
-            {
-                int dest = (j >= MyRank()) ? (j + 1) : j;
-                // TODO: Should we use MPI_Bcast instead for better performance
-                MPI_Isend(headerCPU, headerCPU->Size(), MPI_CHAR, dest, numGradMatrices + 1 + numGradMatrices, m_mpi->Communicator(), &(sendAggHeaderRequests[j])) || MpiFail("MPI_Isend");
-            }
-        }
+        // Broadcast the aggregated header to all nodes
+        MPI_Bcast(headerCPU, headerCPU->Size(), MPI_CHAR, m_mpi->MainNodeRank(), m_mpi->Communicator()) || MpiFail("MPI_Bcast");
 
         // Wait for the allreduce operations to finish and initiate transfer back to the GPU if needed
         if (!m_nccl.IsSupported())
@@ -402,11 +388,7 @@ private:
                 }
             }
         }
-
-        // Wait to receive aggregate header
-        if (!m_mpi->IsMainNode())
-            MPI_Wait(&recvAggHeaderRequest, MPI_STATUSES_IGNORE) || MpiFail("MPI_Wait");
-
+        
         if (m_nccl.IsSupported())
             m_nccl.Sync();
         else if (deviceId >= 0 && m_AggregationBuffer == 0)
@@ -418,8 +400,6 @@ private:
         // Wait for completion of the async send requests
         if (!m_mpi->IsMainNode())
             MPI_Wait(&sendHeaderRequest, MPI_STATUSES_IGNORE) || MpiFail("MPI_Wait");
-        else
-            MPI_Waitall(sendAggHeaderRequests.size(), sendAggHeaderRequests.data(), MPI_STATUSES_IGNORE) || MpiFail("MPI_Waitall");
 
         if (showSyncPerfStats)
         {
