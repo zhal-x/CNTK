@@ -17,7 +17,8 @@ from cntk.ops.functions import CloneMethod
 
 abs_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(abs_path, "..", "..", "..", "common"))
-from nn import LSTMP_component_with_self_stabilization, stabilize, linear_layer, print_training_progress
+from nn import LSTMP_component_with_self_stabilization, stabilize, linear_layer
+from cntk.utils import ProgressPrinter
 
 # Given a vocab and tensor, print the output
 def print_sequences(sequences, i2w):
@@ -193,7 +194,7 @@ def sequence_to_sequence_translator(debug_output=False, run_test=False):
     # make things more basic for running a quicker test
     if run_test:
         epoch_size = 5000
-        max_epochs = 1
+        max_epochs = 5
         training_progress_output_freq = 30
 
     valid_reader = create_reader(valid_path, False, input_vocab_dim, label_vocab_dim)
@@ -202,6 +203,7 @@ def sequence_to_sequence_translator(debug_output=False, run_test=False):
             find_arg_by_name('raw_labels',ng) : valid_reader.streams.labels
         }
 
+    pp = ProgressPrinter(training_progress_output_freq, num_epochs=max_epochs)
     for epoch in range(max_epochs):
         loss_numer = 0
         metric_numer = 0
@@ -224,11 +226,11 @@ def sequence_to_sequence_translator(debug_output=False, run_test=False):
                 e = ng.eval(mb_valid)
                 print_sequences(e, i2w)
 
-            print_training_progress(trainer, mbs, training_progress_output_freq)
+            pp.update_with_trainer(trainer, with_metric=True)
             i += mb_train[raw_labels].num_samples
             mbs += 1
 
-        print("--- EPOCH %d DONE: loss = %f, errs = %f ---" % (epoch, loss_numer/denom, 100.0*(metric_numer/denom)))
+        pp.epoch_summary(with_metric=True)
 
 
     error1 = translator_test_error(z, trainer, input_vocab_dim, label_vocab_dim)

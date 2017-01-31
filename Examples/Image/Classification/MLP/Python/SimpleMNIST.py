@@ -12,10 +12,12 @@ from cntk.io import MinibatchSource, CTFDeserializer, StreamDef, StreamDefs, INF
 from cntk.device import cpu, set_default_device
 from cntk.learner import sgd, learning_rate_schedule, UnitType
 from cntk.ops import input_variable, cross_entropy_with_softmax, classification_error, relu, element_times, constant
+from cntk.layers import Dense
+from cntk.models import Sequential, LayerStack
+from cntk.utils import ProgressPrinter
 
 abs_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(abs_path, "..", "..", "..", "..", "common"))
-from nn import fully_connected_classifier_net, print_training_progress
 
 def check_path(path):
     if not os.path.exists(path):
@@ -45,8 +47,9 @@ def simple_mnist(debug_output=False):
 
     # Instantiate the feedforward classification model
     scaled_input = element_times(constant(0.00390625), input)
-    z = fully_connected_classifier_net(
-        scaled_input, num_output_classes, hidden_layers_dim, num_hidden_layers, relu)
+    z = Sequential([
+            LayerStack(num_hidden_layers, lambda i: Dense(hidden_layers_dim, activation=relu)),
+            Dense(num_output_classes)])(scaled_input)
 
     ce = cross_entropy_with_softmax(z, label)
     pe = classification_error(z, label)
@@ -77,10 +80,16 @@ def simple_mnist(debug_output=False):
     if debug_output:
         training_progress_output_freq = training_progress_output_freq/4
 
+    pp = ProgressPrinter(training_progress_output_freq, num_epochs=num_sweeps_to_train_with)
+    epoch = 0
     for i in range(0, int(num_minibatches_to_train)):
         mb = reader_train.next_minibatch(minibatch_size, input_map=input_map)
         trainer.train_minibatch(mb)
-        print_training_progress(trainer, i, training_progress_output_freq)
+        pp.update_with_trainer(trainer, with_metric=True)
+        new_epoch = int(trainer.total_number_of_samples_seen / num_samples_per_sweep);
+        if (new_epoch != epoch):
+            pp.epoch_summary(with_metric=True)
+            epoch = new_epoch
 
     # Load test data
     path = os.path.normpath(os.path.join(data_dir, "Test-28x28_cntk_text.txt"))
