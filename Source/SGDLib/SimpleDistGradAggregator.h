@@ -293,7 +293,7 @@ private:
         if (!m_mpi->IsMainNode())
             MPI_Isend(headerCPU, headerCPU->Size(), MPI_CHAR, m_mpi->MainNodeRank(), numGradMatrices, m_mpi->Communicator(), &sendHeaderRequest) || MpiFail("MPI_Isend");
 
-        // Perform sync allreduce on the gradient data
+        // Perform async allreduce on the gradient data
         std::vector<MPI_Request> allReduceRequests;
         if (!m_nccl.IsSupported())
         {
@@ -355,8 +355,14 @@ private:
         }
 
         // Broadcast the aggregated header to all nodes
-        MPI_Bcast(headerCPU, headerCPU->Size(), MPI_CHAR, m_mpi->MainNodeRank(), m_mpi->Communicator()) || MpiFail("MPI_Bcast");
-
+        if (!m_nccl.IsSupported())
+        {
+            MPI_Bcast(headerCPU, headerCPU->Size(), MPI_CHAR, m_mpi->MainNodeRank(), m_mpi->Communicator()) || MpiFail("MPI_Bcast");
+        }
+        else
+        {
+            m_nccl.Broadcast(headerCPU, headerCPU->Size(), MPI_CHAR, m_mpi->MainNodeRank());
+        }
         // Wait for the allreduce operations to finish and initiate transfer back to the GPU if needed
         if (!m_nccl.IsSupported())
         {
