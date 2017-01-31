@@ -22,7 +22,7 @@ test_cases = {
     "ResNet::TrainResNet_CIFAR10.py resnet110": {
         "dir": "Examples/Image/Classification/ResNet/Python",
         "exe": "python.exe",
-        "args": ["TrainResNet_CIFAR10.py", "-n resnet110"]
+        "args": ["TrainResNet_CIFAR10.py", "-n", "resnet110"]
     },
     "ResNet::ResNet110_CIFAR10.cntk": {
         "dir": "Examples/Image/Classification/ResNet/BrainScript",
