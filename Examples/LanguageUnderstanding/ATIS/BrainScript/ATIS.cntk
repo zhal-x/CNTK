@@ -13,7 +13,7 @@ parallelTrain = true
 command = Train:Output:Test
 
 precision = "float"
-deviceId = "-1"        # change to "auto" to use GPUs
+deviceId = "auto"        # change to "auto" to use GPUs
 
 wordCount = 944    # number of words
 labelCount = 127   # number of labels 
