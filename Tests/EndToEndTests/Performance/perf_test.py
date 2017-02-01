@@ -3,7 +3,6 @@ import importlib
 import os
 import platform
 import re
-import signal
 import subprocess
 import sys
 import time
@@ -112,7 +111,7 @@ if __name__ == '__main__':
 
                     #check if we"ve got enough log, or if the process has run long enough
                     if (logs > num_logs_to_collect or time.time() - start_time > max_per_test_time):
-                        os.kill(p.pid, signal.CTRL_C_EVENT)
+                        p.terminate()
         except KeyboardInterrupt:
             pass
         os.chdir(cwd)

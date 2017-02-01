@@ -7,7 +7,6 @@
 import numpy as np
 import os
 import sys
-import signal
 import subprocess
 import re
 import pytest
@@ -50,7 +49,7 @@ def mpiexec_test(device_id, script, params, expected_test_error, match_exactly=T
         try:
             out = p.communicate(timeout=TIMEOUT_SECONDS)[0]  # in case we have a hang
         except subprocess.TimeoutExpired:
-            os.kill(p.pid, signal.CTRL_C_EVENT)
+            p.terminate()
             raise RuntimeError('Timeout in mpiexec, possibly hang')
     str_out = out.decode(sys.getdefaultencoding())
     results = re.findall("Final Results: Minibatch\[.+?\]: errs = (.+?)%", str_out)
