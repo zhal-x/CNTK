@@ -37,6 +37,69 @@ def parse_cntkv2_output(line):
     '''Finished Epoch[7 of 10]: loss = 0.042747 * 60032, metric = 0.0% * 60032 1.219s (49246.9 samples per second)'''
     results = re.findall("loss = (.+?) \* (.+?), metric = (.+?)% \* [0-9]+ (.+?)s ", line)
     return [float(v) for v in list(results[0])] if len(results) > 0 else [] # ce, samples, err, seconds
+    
+def run_test_case(t, verbose):
+    start_time = time.time()
+    path = ["..", "..", ".."]+t["dir"].split("/")
+    os.chdir(os.path.join(*path))
+    training_samples = 0
+    training_seconds = 0
+
+    args = t["args"]
+    is_cntkV2 = (t["exe"] == "python")
+    
+    # add default args
+    if is_cntkV2:
+        args = ["-u"] + args # this is needed for python to output without caching
+    else:
+        args = args + ["makeMode=false", "traceLevel=1"] # need to be verbose at the beginning to fill out stdout before capturing lines
+    
+    args = [t["exe"]] + args
+    
+    distributed = ("distributed" in t)
+    
+    if distributed:
+        # add tags of rank
+        if platform.system() == 'Linux':
+            fixture = ["-tag-output"]
+        else:
+            fixture = ["-lines"]
+        args = ["mpiexec"] + fixture + t["distributed"] + args
+
+    print("\n--- Running  {} {}---\n".format(n, args))
+
+    with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True) as p:
+        logs = 0
+        for line in p.stdout:
+            if verbose:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+            
+            #preprocess lines to parse only rank 0
+            if distributed:
+                if platform.system() == 'Linux':
+                    prefix = "[1,0]<stdout>:"
+                else:
+                    prefix = "[0]"
+                
+                line_start = line.find(prefix)
+                line = "" if line_start != 0 else line[len(prefix):]
+            
+            result = parse_cntkv2_output(line) if is_cntkV2 else parse_cntkv1_output(line)
+            if (len(result) > 0):
+                if not verbose:
+                    print("ce {} err {} samples {} speed {:.1f}".format(result[0], result[2], int(result[1]), result[1]/result[3] if result[3] > 0 else 0))
+                if logs > 0: # exclude the first epoch which may have some overhead in reader prefetch
+                    training_samples += result[1]
+                    training_seconds += result[3]
+                logs+=1
+
+            #check if we"ve got enough log, or if the process has run long enough
+            if (logs > num_logs_to_collect or time.time() - start_time > max_per_test_time):
+                p.terminate()
+
+    print("\n--- Finished {}: ({:.1f} samples/second), total {:.1f} seconds ---\n".format(
+        n, training_samples/training_seconds if training_seconds>0 else 0, time.time() - start_time))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Performance test')
@@ -54,66 +117,5 @@ if __name__ == '__main__':
         print("Selected tests: {}".format(sorted_key))
     
     for n in sorted_key:
-        print("\n--- Running  {} ---\n".format(n))
-        t = test_cases[n]
-        start_time = time.time()
-        path = ["..", "..", ".."]+t["dir"].split("/")
-        os.chdir(os.path.join(*path))
-        training_samples = 0
-        training_seconds = 0
-        try:
-            args = t["args"]
-            is_cntkV2 = (t["exe"] == "python")
-            
-            # add default args
-            if is_cntkV2:
-                args = ["-u"] + args # this is needed for python to output without caching
-            else:
-                args = args + ["makeMode=false", "traceLevel=1"] # need to be verbose at the beginning to fill out stdout before capturing lines
-            
-            args = [t["exe"]] + args
-            
-            distributed = ("distributed" in t)
-            
-            if distributed:
-                # add tags of node
-                if platform.system() == 'Linux':
-                    fixture = ["-tag-output"]
-                else:
-                    fixture = ["-lines"]
-                args = ["mpiexec"] + fixture + t["distributed"] + args
-
-            with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, universal_newlines=True) as p:
-                logs = 0
-                for line in p.stdout:
-                    if verbose:
-                        sys.stdout.write(line)
-                        sys.stdout.flush()
-                    
-                    #preprocess lines to parse only rank 0
-                    if distributed:
-                        if platform.system() == 'Linux':
-                            prefix = ",0]<stdout>:"
-                        else:
-                            prefix = "[0]"
-                        
-                        line_start = line.find(prefix)
-                        line = "" if line_start == -1 else line[line_start:]
-                    
-                    result = parse_cntkv2_output(line) if is_cntkV2 else parse_cntkv1_output(line)
-                    if (len(result) > 0):
-                        if not verbose:
-                            print("ce {} err {} samples {} speed {:.1f}".format(result[0], result[2], int(result[1]), result[1]/result[3] if result[3] > 0 else 0))
-                        if logs > 0: # exclude the first epoch which may have some overhead in reader prefetch
-                            training_samples += result[1]
-                            training_seconds += result[3]
-                        logs+=1
-
-                    #check if we"ve got enough log, or if the process has run long enough
-                    if (logs > num_logs_to_collect or time.time() - start_time > max_per_test_time):
-                        p.terminate()
-        except KeyboardInterrupt:
-            pass
+        run_test_case(test_cases[n], verbose)
         os.chdir(cwd)
-        print("\n--- Finished {}: ({:.1f} samples/second), total {:.1f} seconds ---\n".format(
-            n, training_samples/training_seconds if training_seconds>0 else 0, time.time() - start_time))
