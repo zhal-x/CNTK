@@ -64,7 +64,7 @@ if __name__ == '__main__':
         training_seconds = 0
         try:
             args = t["args"]
-            is_cntkV2 = (t["exe"] == "python.exe")
+            is_cntkV2 = (t["exe"] == "python")
             
             # add default args
             if is_cntkV2:
@@ -94,19 +94,20 @@ if __name__ == '__main__':
                     #preprocess lines to parse only rank 0
                     if distributed:
                         if platform.system() == 'Linux':
-                            line = line[3:]
+                            prefix = ",0]<stdout>:"
                         else:
-                            if line[0:3] == "[0]":
-                                line = line[3:]
-                            else:
-                                line = ""
+                            prefix = "[0]"
+                        
+                        line_start = line.find(prefix)
+                        line = "" if line_start == -1 else line[line_start:]
                     
                     result = parse_cntkv2_output(line) if is_cntkV2 else parse_cntkv1_output(line)
                     if (len(result) > 0):
                         if not verbose:
-                            print("ce {} err {} speed {:.1f}".format(result[0], result[2], result[1]/result[3]))
-                        training_samples += result[1]
-                        training_seconds += result[3]
+                            print("ce {} err {} samples {} speed {:.1f}".format(result[0], result[2], int(result[1]), result[1]/result[3] if result[3] > 0 else 0))
+                        if logs > 0: # exclude the first epoch which may have some overhead in reader prefetch
+                            training_samples += result[1]
+                            training_seconds += result[3]
                         logs+=1
 
                     #check if we"ve got enough log, or if the process has run long enough
@@ -115,5 +116,5 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             pass
         os.chdir(cwd)
-        print("\n--- Finished {}: {:.0f} samples in {:.1f} seconds ({:.1f} samples/second), total {:.1f} seconds ---\n".format(
-            n, training_samples, training_seconds, training_samples/training_seconds if training_seconds>0 else 0, time.time() - start_time))
+        print("\n--- Finished {}: ({:.1f} samples/second), total {:.1f} seconds ---\n".format(
+            n, training_samples/training_seconds if training_seconds>0 else 0, time.time() - start_time))

@@ -91,6 +91,10 @@ def simple_mnist(debug_output=False):
             pp.epoch_summary(with_metric=True)
             epoch = new_epoch
 
+    #print the last epoch
+    if pp.samples_since_start > 0:
+        pp.epoch_summary(with_metric=True)
+
     # Load test data
     path = os.path.normpath(os.path.join(data_dir, "Test-28x28_cntk_text.txt"))
     check_path(path)
