@@ -1408,7 +1408,7 @@ void AggregateAccumulatorValuesAndUpdateEvaluation(
     set<shared_ptr<ComputationNodeBase>> evalNodesWhichAccumulateResult,
     shared_ptr<DistGradHeader> gradHeader,
     shared_ptr<MPIWrapper> mpi,
-    size_t m_packThresholdSize = 32 * 1024);
+    size_t packThresholdSize = (size_t)(32 * 1024));
 
 // -----------------------------------------------------------------------
 // EpochAccumulatorNode calculates mean values of all samples used in forward pass.
