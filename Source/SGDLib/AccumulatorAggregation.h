@@ -53,7 +53,8 @@ void AggregateAccumulatorValuesAndUpdateEvaluation(
             false /*useAsyncAggregation*/,
             net->GetDeviceId(),
             0 /*syncStatsTrace*/,
-            ::CNTK::MPICommunicator());
+            ::CNTK::MPICommunicator(),
+            packThresholdSize);
     else
         distGradAgg = make_shared<SimpleDistGradAggregator<ElemType>>(
             mpi,
@@ -130,7 +131,7 @@ void AggregateAccumulatorValuesAndUpdateEpochEvaluation(
     const std::vector<ComputationNodeBasePtr>& evaluationNodes,
     CriterionAccumulator<ElemType> localEpochEvalErrors,
     std::function<bool(ComputationNodeBasePtr)> containsAccumulatedResult,
-    size_t packThresholdSize = 32 * 1024)
+    size_t packThresholdSize = (size_t)(32 * 1024))
 {
     // Each node contains accumulated values for part of the data set, we have to aggregate accumulated values.
     AggregateAccumulatorValuesAndUpdateEvaluation<ElemType>(net, evalNodesWhichAccumulateResult, gradHeader, mpi, packThresholdSize);
