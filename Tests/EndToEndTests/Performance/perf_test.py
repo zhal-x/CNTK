@@ -98,8 +98,8 @@ def run_test_case(t, verbose):
             if (logs > num_logs_to_collect or time.time() - start_time > max_per_test_time):
                 p.terminate()
 
-    print("\n--- Finished {}: ({:.1f} samples/second), total {:.1f} seconds ---\n".format(
-        n, training_samples/training_seconds if training_seconds>0 else 0, time.time() - start_time))
+    print("\n--- Finished {}: training {:.2f} seconds ({:.1f} samples/second), total {:.2f} seconds ---\n".format(
+        n, training_seconds, training_samples/training_seconds if training_seconds>0 else 0, time.time() - start_time))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Performance test')

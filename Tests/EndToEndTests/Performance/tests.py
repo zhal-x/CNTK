@@ -9,33 +9,33 @@ test_cases = {
         "exe": "cntk",
         "args": ["configFile=01_OneHidden.cntk"]
     },
-    "ResNet::TrainResNet_CIFAR10.py": {
+    "ResNet20::TrainResNet_CIFAR10.py": {
         "dir": "Examples/Image/Classification/ResNet/Python",
         "exe": "python",
         "args": ["TrainResNet_CIFAR10.py"]
     },
-    "ResNet::ResNet20_CIFAR10.cntk": {
+    "ResNet20::ResNet20_CIFAR10.cntk": {
         "dir": "Examples/Image/Classification/ResNet/BrainScript",
         "exe": "cntk",
         "args": ["configFile=ResNet20_CIFAR10.cntk"]
     },
-    "ResNet::TrainResNet_CIFAR10.py resnet110": {
+    "ResNet110::TrainResNet_CIFAR10.py resnet110": {
         "dir": "Examples/Image/Classification/ResNet/Python",
         "exe": "python",
         "args": ["TrainResNet_CIFAR10.py", "-n", "resnet110"]
     },
-    "ResNet::TrainResNet_CIFAR10.py resnet110 2-worker": {
+    "ResNet110::Distributed::TrainResNet_CIFAR10.py resnet110 2-worker": {
         "dir": "Examples/Image/Classification/ResNet/Python",
         "exe": "python",
         "args": ["TrainResNet_CIFAR10.py", "-n", "resnet110"],
         "distributed": ["-n", "2"]
     },
-    "ResNet::ResNet110_CIFAR10.cntk": {
+    "ResNet110::ResNet110_CIFAR10.cntk": {
         "dir": "Examples/Image/Classification/ResNet/BrainScript",
         "exe": "cntk",
         "args": ["configFile=ResNet110_CIFAR10.cntk"]
     },
-    "ResNet::ResNet110_CIFAR10.cntk 2-worker": {
+    "ResNet110::Distributed::ResNet110_CIFAR10.cntk 2-worker": {
         "dir": "Examples/Image/Classification/ResNet/BrainScript",
         "exe": "cntk",
         "args": ["configFile=ResNet110_CIFAR10.cntk"],
