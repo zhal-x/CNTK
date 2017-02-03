@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <mutex>
 #include <future>
+#include <cstddef>
 
 #ifdef SWIG
 #define final
@@ -613,6 +614,12 @@ namespace CNTK
         CNTK_API NDArrayViewPtr Alias(bool readOnly = false) const;
 
         ///
+        /// Creates a new NDArrayView which is an alias of a slice of 'this' view; i.e. a new view over the underlying data
+        /// corresponding to the specified slice of 'this' view.
+        ///
+        CNTK_API NDArrayViewPtr SliceView(const std::vector<size_t>& startOffset, const std::vector<size_t>& extent, bool readOnly = false) const;
+
+        ///
         /// Creates a new NDArrayView which is an alias of 'this' view but with a new shape.
         ///
         CNTK_API NDArrayViewPtr AsShape(const NDShape& newShape) const;
@@ -812,6 +819,7 @@ namespace CNTK
         CNTK_API static const int SentinelStaticAxisIndexValueForAllStaticAxes;
         CNTK_API static const int SentinelStaticAxisIndexValueForUnknownAxes;
         CNTK_API static const int SentinelEndStaticAxisIndexValue;
+        CNTK_API static const int SentinelStaticAxisIndexValueForAllAxes;
 
         class UniqueDynamicAxesNames
         {
@@ -860,7 +868,8 @@ namespace CNTK
         {
             return ((m_staticAxisIdx != SentinelStaticAxisIndexValueForDynamicAxes) &&
                     (m_staticAxisIdx != SentinelStaticAxisIndexValueForAllStaticAxes) &&
-                    (m_staticAxisIdx != SentinelStaticAxisIndexValueForUnknownAxes));
+                    (m_staticAxisIdx != SentinelStaticAxisIndexValueForUnknownAxes) &&
+                    (m_staticAxisIdx != SentinelStaticAxisIndexValueForAllAxes));
         }
 
         ///
@@ -901,6 +910,11 @@ namespace CNTK
         /// Axis object representing all the static axes of an operand
         ///
         CNTK_API static const Axis& AllStaticAxes();
+
+        ///
+        /// Axis object representing all static and dynamic axes of an operand
+        ///
+        CNTK_API static const Axis& AllAxes();
 
         ///
         /// Returns a new unique Dynamic axis
@@ -1847,8 +1861,11 @@ private:
 
     private:
         explicit Parameter(const NDArrayViewPtr& value, const std::wstring& name, const std::wstring& uid)
-            : Variable(value->Shape(), VariableKind::Parameter, value->GetDataType(), value->DeepClone(false), true, {}, name, uid)
-        {}
+            : Variable(value->Shape(), VariableKind::Parameter, value->GetDataType(), value, true, {}, name, uid)
+        {
+            if (value->IsReadOnly())
+                InvalidArgument("Parameter cannot be constructed from a read-only NDArrayView value; you can create a non read-only clone of the value and use that instead!");
+        }
     };
 
     // Implementation note: The Variable type is a value type and not polymorphic in nature. 
@@ -1929,7 +1946,7 @@ private:
 
     private:
         Constant(const NDArrayViewPtr& value, const std::wstring& name, const std::wstring& uid)
-            : Variable(value->Shape(), VariableKind::Constant, value->GetDataType(), value->DeepClone(), false, {}, name, uid)
+            : Variable(value->Shape(), VariableKind::Constant, value->GetDataType(), value, false, {}, name, uid)
         {}
 
         ///
@@ -1991,11 +2008,13 @@ namespace CNTK
     /// 
     class Value : public std::enable_shared_from_this<Value>
     {
+        friend class Utils;
+
     public:
         ///
         /// A multi-dimensional value with no mask.
         ///
-        CNTK_API Value(const NDArrayViewPtr& data);
+        explicit CNTK_API Value(const NDArrayViewPtr& data);
 
         ///
         /// A multi-dimensional value with an associated mask.
@@ -2045,16 +2064,185 @@ namespace CNTK
         /// The created Value object contains a copy of the specified 'sequences' data.
         ///
         template <typename ElementType>
-        CNTK_API static ValuePtr Create(size_t vocabularySize, const std::vector<std::vector<size_t>>& oneHotSequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false);
+        CNTK_API static ValuePtr Create(size_t dimension, const std::vector<std::vector<size_t>>& oneHotSequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false);
 
         ///
         /// Create a new Value object containing a collection of variable length sequences of one hot vectors
         /// The created Value object contains a copy of the specified 'sequences' data.
         ///
         template <typename ElementType>
-        static ValuePtr Create(size_t vocabularySize, const std::vector<std::vector<size_t>>& oneHotSequences, const DeviceDescriptor& device, bool readOnly = false)
+        static ValuePtr Create(size_t dimension, const std::vector<std::vector<size_t>>& oneHotSequences, const DeviceDescriptor& device, bool readOnly = false)
         {
-            return Create<ElementType>(vocabularySize, oneHotSequences, {}, device, readOnly);
+            return Create<ElementType>(dimension, oneHotSequences, {}, device, readOnly);
+        }
+
+        ///
+        /// Creates a new Value object containing a batch of samples.
+        /// The number of samples in the batch is the number of elements in batch divided by the size of shape (A runtime error occurs if the remainder is not zero).
+        /// The created Value object contains a copy of the specified data in batch.
+        /// Parameters:
+        ///     shape: the tensor shape of the Value object.
+        ///     batchData : the data to be contained in the Value object.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value object is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        CNTK_API static ValuePtr CreateBatch(const NDShape& sampleShape, const std::vector<ElementType>& batchData, const DeviceDescriptor& device, bool readOnly = false);
+
+        ///
+        /// Creates a new Value object containing a sequence of samples.
+        /// The created Value object contains a copy of the specified sequence data.
+        /// The sequenceStartFlag specifies wehther this sequence is a new sequence or continuation of a previous sequence at the same index in the sequences list from a previous call to this method.The sequence length is the number of elements in sequence divided by the size of shape.
+        /// (A runtime error occurs if the remainder is not zero).
+        /// Parameters:
+        ///     shape: the tensor shape of the Value.
+        ///     sequenceData : the data to be contained in the Value.
+        ///     sequenceStartFlag : true indicates that it is a new sequence. false means a continuation of a previous sequence.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        CNTK_API static ValuePtr CreateSequence(const NDShape& sampleShape, const std::vector<ElementType>& sequenceData, bool sequenceStartFlag, const DeviceDescriptor& device, bool readOnly = false);
+
+        ///
+        /// Creates a new Value object containing a sequence of samples.
+        /// The created Value object contains a copy of the specified data in sequence.
+        /// The sequence length is the number of elements in sequence divided by the size of shape(A runtime error occurs if the remainder is not zero).
+        /// The created sequece is a new sequence.
+        /// Parameters:
+        ///     shape: the tensor shape of the Value.
+        ///     sequenceData : the data to be contained in the Value.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        static ValuePtr CreateSequence(const NDShape& sampleShape, const std::vector<ElementType>& sequenceData, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return CreateSequence(sampleShape, sequenceData, true, device, readOnly);
+        }
+
+        ///
+        /// Creates a new Value object containing a batch of variable length sequences.
+        /// The created Value object contains a copy of the specified data in batchOfSequences.
+        /// The number of sequences in the batch is the size of batchOfSequences.
+        /// The length of each sequence is the number of elements in the corresponding sequence of batchOfSequences divided by the size of shape.
+        /// (A runtime error occurs if the remainder is not zero).
+        /// Parameters:
+        ///     shape: the tensor shape of the Value.
+        ///     batchOfSequences : the data to be stored in the Value.The outer List represents a collection of sequences with variable length, and the inner List represents each individual sequence.
+        ///     sequenceStartFlags: A collection of boolean value. Each element represent whether the correspoinding sequence in batchOfSequences is a new sequence (in case of true) or a continuation of a previous sequence (in case of false).
+        ///     device : on which device the Value should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        static ValuePtr CreateBatchOfSequences(const NDShape& sampleShape, const std::vector<std::vector<ElementType>>& batchOfSequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create(sampleShape, batchOfSequences, sequenceStartFlags, device, readOnly);
+        }
+
+        ///
+        /// Creates a new Value object containing a batch of variable length sequences.
+        /// The created Value object contains a copy of the specified data in batchOfSequences.
+        /// The number of sequences in the batch is the size of batchOfSequences.
+        /// The length of each sequence is the number of elements in the corresponding sequence of batchOfSequences divided by the size of shape.
+        /// (A runtime error occurs if the remainder is not zero).
+        /// Each sequence in batchOfSequences is a new sequence.
+        /// Parameters:
+        ///     shape: the tensor shape of the Value.
+        ///     batchOfSequences : the data to be stored in the Value.The outer List represents a collection of sequences with variable length, and the inner List represents each individual sequence.
+        ///     device : on which device the Value should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        static ValuePtr CreateBatchOfSequences(const NDShape& sampleShape, const std::vector<std::vector<ElementType>>& batchOfSequences, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create(sampleShape, batchOfSequences, {}, device, readOnly);
+        }
+
+        ///
+        /// Creates a new Value object containing a batch of samples.
+        /// Each sample is represented by an index value that points to the non-zero value in the one-hot vector of dimension elements.
+        /// The number of samples in the batch is the number of elements in batch.
+        /// Parameters:
+        ///     ElementType: data type of the created Value object. Currently, float and double are supported.
+        ///     dimension : the size of dimension of the one - hot vector.
+        ///     batchData : the collection of indexes representing the batch of samples.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        CNTK_API static ValuePtr CreateBatch(size_t dimension, const std::vector<size_t>& batchData, const DeviceDescriptor& device, bool readOnly = false);
+
+        ///
+        /// Creates a new Value object containing a sequence of samples.
+        /// Each sample is represented by an index value that points to the non-zero value in the one-hot vector of dimension elements.
+        /// The sequenceStartFlag specifies wehther this sequence is a new sequence or continuation of a previous sequence at the same index in the sequences list from a previous call to this method.
+        /// The sequence length is the number of elements in sequence.
+        /// Parameters:
+        ///     ElementType: data type of the created Value object.Currently, float and double are supported.
+        ///     dimension : the size of dimension of the one - hot vector.
+        ///     sequenceData : the collection of indexes representing the sequence of samples.
+        ///     sequenceStartFlag : true indicates that it is a new sequence. false means a continuation of a previous sequence.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        CNTK_API static ValuePtr CreateSequence(size_t dimension, const std::vector<size_t>& sequenceData, bool sequenceStartFlag, const DeviceDescriptor& device, bool readOnly = false);
+
+        ///
+        /// Creates a new Value object containing a sequence of samples.
+        /// Each sample is represented by an index value that points to the non-zero value in the one-hot vector of dimension elements.
+        /// The sequence length is the number of elements in sequence.
+        /// The created sequence is a new sequence.
+        /// Parameters:
+        ///     ElementType: data type of the created Value object.Currently, float and double are supported.
+        ///     dimension : the size of dimension of the one - hot vector.
+        ///     sequenceData : the collection of indexes representing the sequence of samples.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        static ValuePtr CreateSequence(size_t dimension, const std::vector<size_t>& sequenceData, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return CreateSequence<ElementType>(dimension, sequenceData, true, device, readOnly);
+        }
+
+        ///
+        /// Creates a new Value object containing a batch of variable length sequences.
+        /// Each sample is represented by an index value that points to the non-zero value in the one-hot vector of dimension elements.
+        /// The number of sequences is the number of elements in the outer vector of batchOfSequences.
+        /// The length of each sequence is the number of elements of the corresponding sequence in the inner vector of batchOfSequences.
+        /// Parameters:
+        ///     ElementType: data type of the created Value object.Currently, float and double are supported.
+        ///     dimension : the size of dimension of the one - hot vector.
+        ///     batchOfSequences : the collection of indexes representing sequences of samples.The outer List represents a collection of sequences with variable length, and the inner List represents each individual sequence.
+        ///     sequenceStartFlags : A collection of boolean value.Each element represent whether the correspoinding sequence in batchOfSequences is a new sequence(in case of true) or a continuation of a previous sequence(in case of false).
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        static ValuePtr CreateBatchOfSequences(size_t dimension, const std::vector<std::vector<size_t>>& batchOfSequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create<ElementType>(dimension, batchOfSequences, sequenceStartFlags, device, readOnly);
+        }
+
+        ///
+        /// Creates a new Value object containing a batch of variable length sequences.
+        /// Each sample is represented by an index value that points to the non-zero value in the one-hot vector of dimension elements.
+        /// The number of sequences is the number of elements in the outer vector of batchOfSequences.
+        /// The length of each sequence is the number of elements of the corresponding sequence in the inner vector of batchOfSequences.
+        /// Each sequence in batchOfSequences is a new sequence.
+        /// Parameters:
+        ///     ElementType: data type of the created Value object.Currently, float and double are supported.
+        ///     dimension : the size of dimension of the one - hot vector.
+        ///     batchOfSequences : the collection of indexes representing sequences of samples.The outer List represents a collection of sequences with variable length, and the inner List represents each individual sequence.
+        ///     device : on which device the Value object should be created.
+        ///     readOnly : the Value is read - only if this flag is true.
+        ///
+        template <typename ElementType>
+        static ValuePtr CreateBatchOfSequences(size_t dimension, const std::vector<std::vector<size_t>>& batchOfSequences, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create<ElementType>(dimension, batchOfSequences, {}, device, readOnly);
         }
 
         ///
@@ -2129,6 +2317,61 @@ namespace CNTK
         virtual void CopyFrom(const Value& source);
 
         ///
+        /// Unpacks sequences in 'this' Value as a vector of NDArrayView objects, each represeting a sequence in the 
+        /// batch of sequences that 'this' Value object contains data for.
+        /// Besides the NDArrayView objects (that represent contents of each sequence), this method also returns
+        /// the sequence start information for each sequence, which indicates whether that sequence is the start of
+        /// a new sequence or a continuation of a previous one
+        ///
+        std::pair<std::vector<NDArrayViewPtr>, std::vector<bool>> UnpackVariableValue(const Variable& variable, bool sequenceSegmentsAllowed, const DeviceDescriptor& device)
+        {
+            // PackedValue should be automatically unpacked when accessing Data() and Mask().
+            size_t numOfSequences;
+            size_t maxSequenceLen;
+            std::tie(maxSequenceLen, numOfSequences) = GetSequenceAndBatchLength(variable);
+
+            std::vector<std::ptrdiff_t> sequenceBeginIndices(numOfSequences, 0);
+            std::vector<size_t> sequenceLengths(numOfSequences, maxSequenceLen);
+            GetSequenceStartsAndLengths(Mask(), sequenceBeginIndices, sequenceLengths, variable.DynamicAxes().size());
+
+            auto valueShapeWithSequenceAndBatchAxes = variable.Shape().AppendShape(NDShape({ maxSequenceLen , numOfSequences }));
+            auto valueData = Data()->AsShape(valueShapeWithSequenceAndBatchAxes);
+            if (valueData->Device() != device)
+                valueData = valueData->DeepClone(device, valueData->IsReadOnly());
+
+            std::vector<NDArrayViewPtr> sequences(numOfSequences);
+            std::vector<bool> sequenceStartFlags(numOfSequences);
+            for (size_t i = 0; i < numOfSequences; ++i)
+            {
+                if (!sequenceSegmentsAllowed && (sequenceBeginIndices[i] != 0))
+                    RuntimeError("Value::UnpackVariableValue: Only Value objects containing the entire sequence (no segments) are supported.");
+
+                std::vector<size_t> offset(valueShapeWithSequenceAndBatchAxes.Rank(), 0);
+                offset.back() = i;
+
+                std::vector<size_t> extent(valueShapeWithSequenceAndBatchAxes.Rank() - 1, NDShape::InferredDimension);
+                extent.back() = sequenceLengths[i];
+
+                sequences[i] = valueData->SliceView(offset, extent, valueData->IsReadOnly());
+                sequenceStartFlags[i] = (sequenceBeginIndices[i] == 0);
+            }
+
+            return{ sequences , sequenceStartFlags };
+        }
+
+        ///
+        /// Unpacks sequences in 'this' Value as a vector of NDArrayView objects, each represeting a sequence in the 
+        /// batch of sequences that 'this' Value object contains data for.
+        /// Besides the NDArrayView objects (that represent contents of each sequence), this method also returns
+        /// the sequence start information for each sequence, which indicates whether that sequence is the start of
+        /// a new sequence or a continuation of a previous one
+        ///
+        std::vector<NDArrayViewPtr> UnpackVariableValue(const Variable& variable, const DeviceDescriptor& device)
+        {
+            return UnpackVariableValue(variable, /* sequenceSegmentsAllowed = */false, device).first;
+        }
+
+        ///
         /// Copy the data stored in the Value object to the buffer 'sequences' as a collection of variable length sequences.
         /// The sequence buffer will be resized if necessary.
         /// The Value should have the same tensor shape as outputVariable.
@@ -2194,6 +2437,8 @@ namespace CNTK
 
         virtual std::pair<size_t, size_t> GetSequenceAndBatchLength(const Variable& outputVariable);
 
+        CNTK_API static void GetSequenceStartsAndLengths(const NDMaskPtr& mask, std::vector<ptrdiff_t>& sequenceBeginIndices, std::vector<size_t>& sequenceLengths, size_t numDynamicAxes);
+
         ///
         /// Resize the 'sequences' buffer if needed.
         /// It should be kept in the header file, as the memory should be allocated at the caller side, not the CNTKLibarary.dll side.
@@ -2215,62 +2460,21 @@ namespace CNTK
             // Calculate the number of elements is needed to represent a sample in output buffer.
             // For dense output, it is the total size of the shape.
             // For one-hot output, only 1 index is needed to represent the sample.
-            size_t outputSizeOfSample;
-            if (std::is_same<ElementType, size_t>::value)
-            {
-                outputSizeOfSample = 1;
-            }
-            else
-            {
-                outputSizeOfSample = shape.TotalSize();
-            }
+            size_t outputSizeOfSample = (std::is_same<ElementType, size_t>::value) ? 1 : shape.TotalSize();
 
             // resize the output buffer size to reflect the number of sequences in output.
             sequences.resize(numOfSequences);
 
-            const MaskKind* maskData = nullptr;
-            NDMaskPtr cpuMask = nullptr;
-            if (Mask() != nullptr)
-            {
-                cpuMask = (Device().Type() != DeviceKind::CPU) ? Mask()->DeepClone(DeviceDescriptor::CPUDevice()) : Mask();
-                maskData = cpuMask->DataBuffer();
-            }
-
             // Check whether each sequence has enough space allocated and resize if necessary.
-            size_t sampleCount = 0, seqStart;
+            std::vector<ptrdiff_t> sequenceBeginIndices(numOfSequences, 0);
+            std::vector<size_t> sequenceLengths(numOfSequences, maxSequenceLen);
+            GetSequenceStartsAndLengths(Mask(), sequenceBeginIndices, sequenceLengths, outputVariable.DynamicAxes().size());
             for (auto seqIndex = 0; seqIndex < numOfSequences; seqIndex++)
             {
-                if (maskData == nullptr)
-                {
-                    sampleCount = maxSequenceLen;
-                }
-                else
-                {
-                    seqStart = seqIndex * maxSequenceLen;
-                    // The assumption here is that a sequence always start at 0 with SequenceBegin (as no SequenceStart flag is returned) or
-                    // with Invalid (empty sequence), and ends at the first invalid mask.
-                    if (maskData[seqStart] == MaskKind::Invalid)
-                    {
-                        // The sequence is empty.
-                        sampleCount = 0;
-                    }
-                    else
-                    {
-                        if (maskData[seqStart] != MaskKind::SequenceBegin)
-                            RuntimeError("Currently, only sequence starting with SequenceBegin is supported.");
-                        sampleCount = 1;
-                        while (sampleCount < maxSequenceLen)
-                        {
-                            if (maskData[seqStart + sampleCount] == MaskKind::Valid)
-                                sampleCount++;
-                            else
-                                break;
-                        }
-                    }
-                }
+                if (sequenceBeginIndices[seqIndex] != 0)
+                    RuntimeError("Currently, only sequence starting with SequenceBegin is supported.");
 
-                // resize the sequence buffer to reflect the actual length in output.
-                sequences[seqIndex].resize(sampleCount * outputSizeOfSample);
+                sequences[seqIndex].resize(sequenceLengths[seqIndex] * outputSizeOfSample);
             }
         }
 
@@ -2402,15 +2606,11 @@ namespace CNTK
         CNTK_API virtual void Backward(const BackPropStatePtr& state,
                                        const std::unordered_map<Variable, ValuePtr>& rootGradientValues,
                                        std::unordered_map<Variable, ValuePtr>& backPropagatedGradientValuesForInputs);
+
         ///
         /// Returns the name of the operation that this Function denotes
         ///
-        virtual const std::wstring& OpName() const 
-#ifdef SWIG 
-        { NOT_IMPLEMENTED; }
-#else
-        = 0;
-#endif
+        virtual const std::wstring& OpName() const = 0;
 
     protected:
         ///
@@ -2435,8 +2635,11 @@ namespace CNTK
         ///
         /// Infers the shape, data type and dynamic axes of the outputs of 'this' function based on the 
         /// Function's inputs, and returns Output Variable objects containing the inferred information
+        /// Result cannot exceed the max number of outputs (128).
+        /// The passed "outputs" vector should also reserve 128 elements in order to not cause memory allocation during
+        /// crossing of dll boundary.
         ///
-        CNTK_API virtual std::vector<Variable> InferOutputs() = 0;
+        CNTK_API virtual void InferOutputs(std::vector<Variable>& outputs) = 0;
 
     public:
 
@@ -2541,9 +2744,9 @@ namespace CNTK
         ///
         /// Returns all Input variables of 'this' Function.
         ///
-        std::vector<Variable> Inputs() const
+        std::vector<Variable> Inputs(bool pythonOperandOrder = false) const
         {
-            return *(InputsImpl().get());
+            return *(InputsImpl(pythonOperandOrder).get());
         }
 
         ///
@@ -2641,6 +2844,11 @@ namespace CNTK
         ///
         CNTK_API void PrintGraph() const;
 
+        ///
+        /// Maimum number of outputs that is currently supported.
+        ///
+        static const int MaxNumOutputs = 64;
+
     protected:
         ///
         /// Protected constructor for derived 'Function' types to specify the actual input and output variables for the (primitive) Function instance.
@@ -2662,6 +2870,7 @@ namespace CNTK
 
         // Returns a outputs without ref-counting the owner.
         CNTK_API std::vector<Variable>& RawOutputs() const;
+
     private:
         CNTK_API std::shared_ptr<std::vector<std::pair<Variable, Variable>>> BlockArgumentsMappingImpl() const;
 
@@ -2686,10 +2895,10 @@ namespace CNTK
             return filteredInputs;
         }
 
-        CNTK_API std::shared_ptr<std::vector<Variable>> InputsImpl() const;
+        CNTK_API std::shared_ptr<std::vector<Variable>> InputsImpl(bool pythonOperandOrder = false) const;
         CNTK_API std::shared_ptr<std::vector<Variable>> OutputsImpl() const;
 
-        void ValidateOrUpdateOutputs(std::unordered_map<const Function*, size_t>& visitedFunctions, bool& recurrentNodeOutputModified);
+        void ValidateOrUpdateOutputs(std::unordered_map<const Function*, size_t>& visitedFunctions, bool& recurrentNodeOutputModified, std::vector<Variable>& buffer);
 
         static void ReplacePlaceholderInPlace(Variable& var,
                                               const std::unordered_map<Variable, Variable>& placeholderReplacements,
@@ -3121,6 +3330,11 @@ namespace CNTK
     CNTK_API FunctionPtr ReduceMin(const Variable& operand, const Axis& axis, const std::wstring& name = L"");
 
     ///
+    /// Create an instance of the CNTK built-in Prod reduction operation on specified tensor input operand along the specified axis
+    ///
+    CNTK_API FunctionPtr ReduceProd(const Variable& operand, const Axis& axis, const std::wstring& name = L"");
+
+    ///
     /// Per dimension mean-variance normalization of the specified input operand.
     ///
     CNTK_API FunctionPtr PerDimMeanVarianceNormalize(const Variable& operand, const NDArrayViewPtr& mean, const NDArrayViewPtr& invStdDev, const std::wstring& name = L"");
@@ -3187,6 +3401,7 @@ namespace CNTK
                                             const Variable& bias,
                                             const Variable& runningMean,
                                             const Variable& runningInvStd,
+                                            const Variable& runningSampleCount,
                                             bool spatial,
                                             double normalizationTimeConstant = 0,
                                             double blendTimeConstant = 0,
@@ -3381,6 +3596,8 @@ namespace CNTK
 #endif
     };
 
+// Swig does not understand type aliasing.
+#ifndef SWIG
     ///
     /// Training parameter schedule with per-sample values.
     ///
@@ -3393,15 +3610,16 @@ namespace CNTK
     template <typename T>
     using TrainingParameterPerMinibatchSchedule = TrainingParameterPerUnitSchedule<T, TrainingParameterSchedule<T>::UnitType::Minibatch>;
 
-    typedef TrainingParameterSchedule<double> LearningRateSchedule;
     typedef TrainingParameterPerSampleSchedule<double> LearningRatePerSampleSchedule;
     typedef TrainingParameterPerMinibatchSchedule<double> LearningRatePerMinibatchSchedule;
 
-    typedef TrainingParameterSchedule<double> MomentumSchedule;
     typedef TrainingParameterPerSampleSchedule<double> MomentumPerSampleSchedule;
     typedef TrainingParameterPerMinibatchSchedule<double> MomentumPerMinibatchSchedule;
+#endif
 
-    typedef TrainingParameterPerSampleSchedule<size_t> MinibatchSizeSchedule;
+    typedef TrainingParameterPerUnitSchedule<size_t, TrainingParameterSchedule<size_t>::UnitType::Sample> MinibatchSizeSchedule;
+    typedef TrainingParameterSchedule<double> LearningRateSchedule;
+    typedef TrainingParameterSchedule<double> MomentumSchedule;
 
     ///
     /// This class allows to specify momentum as time constant in place of momentum per sample in 

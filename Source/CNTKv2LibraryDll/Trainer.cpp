@@ -505,6 +505,7 @@ namespace CNTK
 
         state.Save(tempCheckpointFile);
 
+        // The return value is ignored here.
         _wunlink(modelFilePath.c_str());
         _wunlink(trainerStateCheckpointFilePath.c_str());
 
