@@ -393,9 +393,11 @@ namespace CNTK
             (m_prevMinibatchAggregateTrainingLossValue->Device() != DeviceDescriptor::CPUDevice()) ||
             (m_aggregatedEvaluationFunction && m_prevMinibatchAggregateEvalCriterionValue->Device() != DeviceDescriptor::CPUDevice());
 
-#ifndef CPUONLY
         if (scalarOnGPU)
         {
+#ifdef CPUONLY
+            LogicError("Unsupported device");
+#else
             if (m_pAsyncScalarData == nullptr)
             {
                 m_pAsyncScalarData = new TrainerAsyncScalarData;
@@ -403,9 +405,9 @@ namespace CNTK
             auto pinnedScalars = TrainerAsyncScalarData::GetPinnedScalars(m_pAsyncScalarData);
             pTrainingLoss = &(pinnedScalars->m_trainingLoss);
             pEvalCriterion = &(pinnedScalars->m_evalCriterion);
+#endif
         }
         else
-#endif
         {
             pTrainingLoss = &m_prevMinibatchAverageTrainingLoss;
             pEvalCriterion = &m_prevMinibatchAverageEvalCriterion;
