@@ -22,6 +22,8 @@
 #include "Quantizers.h"
 #include "InputAndParamNodes.h"
 
+#define _DEFAULT_PACK_THRESHOLD_SIZE (32 * 1024 * 1024)
+
 namespace Microsoft { namespace MSR { namespace CNTK {
 
 // -----------------------------------------------------------------------
@@ -1408,7 +1410,7 @@ void AggregateAccumulatorValuesAndUpdateEvaluation(
     set<shared_ptr<ComputationNodeBase>> evalNodesWhichAccumulateResult,
     shared_ptr<DistGradHeader> gradHeader,
     shared_ptr<MPIWrapper> mpi,
-    size_t packThresholdSize = (size_t)(32 * 1024));
+    size_t packThresholdSize = _DEFAULT_PACK_THRESHOLD_SIZE);
 
 // -----------------------------------------------------------------------
 // EpochAccumulatorNode calculates mean values of all samples used in forward pass.

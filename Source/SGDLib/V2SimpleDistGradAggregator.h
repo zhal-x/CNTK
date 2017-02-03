@@ -16,6 +16,8 @@
 #include "Utils.h"
 #include "NcclComm.h"
 
+#define _DEFAULT_PACK_THRESHOLD_SIZE (32 * 1024 * 1024)
+
 namespace Microsoft { namespace MSR { namespace CNTK {
 
 template <class ElemType>
@@ -26,7 +28,7 @@ class V2SimpleDistGradAggregator : public IDistGradAggregator<ElemType>
     NcclComm m_nccl;
 
 public:
-    V2SimpleDistGradAggregator(const MPIWrapperPtr& mpi, bool useAsyncAggregation, int deviceId, int syncStatsTrace, ::CNTK::DistributedCommunicatorPtr communicator, size_t packThresholdSize = (32 * 1024))
+    V2SimpleDistGradAggregator(const MPIWrapperPtr& mpi, bool useAsyncAggregation, int deviceId, int syncStatsTrace, ::CNTK::DistributedCommunicatorPtr communicator, size_t packThresholdSize = _DEFAULT_PACK_THRESHOLD_SIZE)
         : IDistGradAggregator<ElemType>(mpi), m_useAsyncAggregation(useAsyncAggregation), m_initialized(false), m_bufferedGradHeader(nullptr), m_syncStatsTrace(syncStatsTrace), m_iterationCount(0),
         m_communicator(communicator), m_nccl(deviceId, mpi), m_packThresholdSize(packThresholdSize)
     {}

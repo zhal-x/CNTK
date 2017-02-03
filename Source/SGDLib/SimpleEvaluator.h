@@ -39,7 +39,7 @@ class SimpleEvaluator
 {
 public:
     SimpleEvaluator(ComputationNetworkPtr net, const MPIWrapperPtr& mpi, bool enableDistributedMBReading = false, const size_t numMBsToShowResult = 100, const size_t firstMBsToShowResult = 0, const int traceLevel = 0, const size_t maxSamplesInRAM = SIZE_MAX,
-                    const size_t numSubminiBatches = 1, size_t packThresholdSize = 32 * 1024) :
+                    const size_t numSubminiBatches = 1, size_t packThresholdSize = _DEFAULT_PACK_THRESHOLD_SIZE) :
         m_net(net), 
         m_numMBsToShowResult(numMBsToShowResult), 
         m_firstMBsToShowResult(firstMBsToShowResult),

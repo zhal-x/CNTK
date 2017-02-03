@@ -14,7 +14,7 @@
 #include "TimerUtility.h"
 #include "MatrixQuantizerImpl.h"
 
-#define _DEFAULT_PACK_THRESHOLD_SIZE (32 * 1024)
+#define _DEFAULT_PACK_THRESHOLD_SIZE (32 * 1024 * 1024)
 
 namespace Microsoft { namespace MSR { namespace CNTK {
 
@@ -216,6 +216,7 @@ private:
                 for (size_t i = 0; i < gradients.size(); i++)
                     m_bufferedGradients[gradients[i]]->SetValue(0);
 
+                m_AggregationBuffer.reset();
                 m_bufferedGradHeader->Clear();
             }
         }

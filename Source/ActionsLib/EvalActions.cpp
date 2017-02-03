@@ -68,7 +68,7 @@ static void DoEvalBase(const ConfigParameters& config, IDataReader& reader)
     size_t maxSamplesInRAM = config(L"maxSamplesInRAM", (size_t)SIZE_MAX);
     size_t numSubminiBatches = config(L"numSubminibatches", (size_t)1);
 
-    size_t packThresholdSize = config(L"packThresholdSizeInKB", (size_t)32) * 1024;
+    size_t packThresholdSize = config(L"packThresholdSizeInKB", (size_t)(32 * 1024)) * 1024;
 
     bool enableDistributedMBReading = config(L"distributedMBReading", GetDistributedMBReadingDefaultValue(config, reader));
 
@@ -136,7 +136,7 @@ void DoCrossValidate(const ConfigParameters& config)
     size_t maxSamplesInRAM    = config(L"maxSamplesInRAM", (size_t)SIZE_MAX);
     size_t numSubminiBatches  = config(L"numSubminibatches", (size_t)1);
 
-    size_t packThresholdSize = config(L"packThresholdSizeInKB", (size_t)32) * 1024;
+    size_t packThresholdSize = config(L"packThresholdSizeInKB", (size_t)(32 * 1024)) * 1024;
 
     ConfigArray evalNodeNames = config(L"evalNodeNames", "");
     vector<wstring> evalNodeNamesVector;
