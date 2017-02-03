@@ -36,7 +36,9 @@ public:
     // -----------------------------------------------------------------------
     // PushAndPullModel() -- Push parameters of learnableNodes to parameter servers, then get the latests model back.
     // -----------------------------------------------------------------------
-    virtual bool PushAndPullModel(const std::list<ComputationNodeBasePtr> & learnableNodes, size_t sampleSinceLastSynced = 0) = 0;
+    //virtual bool PushAndPullModel(const std::list<ComputationNodeBasePtr> & learnableNodes, size_t sampleSinceLastSynced = 0) = 0;
+	virtual bool PushAndPullModel(const std::list<ComputationNodeBasePtr> & learnableNodes, double lr, double lambda, double mom, size_t sampleSinceLastSynced = 0) = 0;
+
 
     // -----------------------------------------------------------------------
     // WaitAll() -- Wait(Barrier) all the other nodes to process

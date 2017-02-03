@@ -186,7 +186,7 @@ public:
         // because the parameter server will minus the delta on the server, so that we should send the minus initial model to the server.
         std::transform(m_deltaArray, m_deltaArray + m_totalModelSize, m_deltaArray, std::bind1st(std::multiplies<ElemType>(), -factor));
 
-        m_workerArray->Add(m_deltaArray, m_totalModelSize);
+        m_workerArray->Add(m_deltaArray, m_totalModelSize, m_addOptions[0]);
         m_workerArray->Get(m_deltaArray, m_totalModelSize);
         WaitAll();
         m_workerArray->Get(m_deltaArray, m_totalModelSize);
@@ -196,7 +196,8 @@ public:
         m_reportTimer.Start();
     }
 
-    bool PushAndPullModel(const std::list<ComputationNodeBasePtr> & learnableNodes, size_t sampleSinceLastSynced) override
+    //bool PushAndPullModel(const std::list<ComputationNodeBasePtr> & learnableNodes, size_t sampleSinceLastSynced) override
+	bool PushAndPullModel(const std::list<ComputationNodeBasePtr> & learnableNodes, double lr, double lambda, double mom, size_t sampleSinceLastSynced) override
     {
         m_parameterSyncCounter++;
 
@@ -207,6 +208,13 @@ public:
         m_reportTimer.Restart();
         WaitAsyncBuffer();
         m_reportTimer.Stop();
+
+		for (int i = 0; i < m_localBufferNum; i++)
+		{
+			m_addOptions.at(i)->set_learning_rate((float)lr);
+			m_addOptions.at(i)->set_lambda((float)lambda);
+			m_addOptions.at(i)->set_momentum((float)mom);
+		}
 
         // reset statics for profiling
         if (m_traceLevel > 2 && m_syncPerfStats > 0 && m_parameterSyncCounter % m_syncPerfStats == 0)
@@ -389,7 +397,7 @@ public:
 
             ElemType* px = m_deltaArray;
             ElemType* py = m_cpuAsyncBuffer[0];
-            m_workerArray->AddAsync(px, m_totalModelSize);
+            m_workerArray->AddAsync(px, m_totalModelSize, m_addOptions[0]);
             m_workerArray->Get(py, m_totalModelSize);
 
             m_reportTimer.Stop();
@@ -439,6 +447,18 @@ private:
         // parameter server offer vary of updaters, we only use the SGD updater for this simple case.
         multiverso::SetCMDFlag<std::string>(std::string("updater_type"), std::string("sgd"));
         multiverso::MV_Init();
+
+		for (int i = 0; i < m_localBufferNum; i++)
+		{
+			m_getOptions.push_back(new multiverso::GetOption());
+			m_getOptions.at(i)->set_worker_id(m_localBufferNum * multiverso::MV_WorkerId() + i);
+			m_addOptions.push_back(new multiverso::AddOption());
+			m_addOptions.at(i)->set_worker_id(m_localBufferNum * multiverso::MV_WorkerId() + i);
+			m_addOptions.at(i)->set_momentum(0.f);
+			m_addOptions.at(i)->set_rho(0.f);
+			m_addOptions.at(i)->set_lambda(0.f);
+			m_addOptions.at(i)->set_learning_rate(1.f);
+		}
 
         int i = 0;
         for (auto nodeIter = learnableNodes.begin(); nodeIter != learnableNodes.end(); nodeIter++, i++)
