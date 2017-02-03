@@ -3850,6 +3850,7 @@ namespace CNTK
 
         Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners);
         Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners);
+        ~Trainer();
 
         void ExecuteForwardBackward(
             const std::unordered_map<Variable, ValuePtr>& arguments,
@@ -3881,6 +3882,8 @@ namespace CNTK
         ValuePtr m_prevMinibatchAggregateEvalCriterionValue;
         double   m_prevMinibatchAverageTrainingLoss;
         double   m_prevMinibatchAverageEvalCriterion;
+
+        void*    m_pAsyncScalarData; // a bag of GPU async copy data for scalar, use void* to avoid polluting header
     };
 
     ///

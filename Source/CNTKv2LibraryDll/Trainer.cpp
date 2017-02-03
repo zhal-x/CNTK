@@ -19,6 +19,43 @@ namespace
 
 namespace CNTK
 {
+#ifndef CPUONLY
+    struct PinnedScalars
+    {
+        double m_trainingLoss;
+        double m_evalCriterion;
+    };
+
+    class TrainerAsyncScalarData
+    {
+        PinnedScalars* m_pinnedScalars;
+        cudaEvent_t m_scalarDoneEvent;
+
+    public:
+        TrainerAsyncScalarData()
+        {
+            cudaMallocHost(&m_pinnedScalars, sizeof(PinnedScalars));
+            cudaEventCreate(&m_scalarDoneEvent);
+        }
+
+        ~TrainerAsyncScalarData()
+        {
+            cudaFreeHost(m_pinnedScalars);
+            cudaEventDestroy(m_scalarDoneEvent);
+        }
+
+        static PinnedScalars* GetPinnedScalars(void* p)
+        {
+            return ((TrainerAsyncScalarData*)p)->m_pinnedScalars;
+        }
+
+        static cudaEvent_t GetScalarDoneEvent(void* p)
+        {
+            return ((TrainerAsyncScalarData*)p)->m_scalarDoneEvent;
+        }
+    };
+#endif
+
     Trainer::Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners)
         : Trainer(model, lossFunction, nullptr, parameterLearners)
     {}
@@ -29,7 +66,8 @@ namespace CNTK
           m_evaluationFunction(evaluationFunction),
           m_parameterLearners(std::make_shared<Learners>(parameterLearners)),
           m_prevMinibatchNumSamples(1),
-          m_distributed(false)
+          m_distributed(false),
+          m_pAsyncScalarData(nullptr)
     {
         // By default we set the number of threads to hardware concurrency.
         if (!Internal::MaxNumCPUThreadsSet())
@@ -94,6 +132,16 @@ namespace CNTK
             fprintf(stderr, "[Note:] Trainer ctor: %d of the model parameters are not covered by any of the specified Learners; these parameters will not be learned\n", (int)m_modelParametersNotCoveredByLearners.size());
 
         m_distributed = m_parameterLearners->IsDistributed();
+    }
+
+    Trainer::~Trainer()
+    {
+#ifndef CPUONLY
+        if (m_pAsyncScalarData)
+        {
+            delete (TrainerAsyncScalarData*)m_pAsyncScalarData;
+        }
+#endif
     }
 
     static double GetScalarValue(const ValuePtr& value)
@@ -334,37 +382,43 @@ namespace CNTK
         outputs.insert(outputsToFetch.begin(), outputsToFetch.end());
 
         auto backPropSate = m_combinedTrainingFunction->Forward(arguments, outputs, computeDevice, { m_aggregatedLossFunction }, m_modelParametersNotCoveredByLearners);
+        m_prevMinibatchAggregateTrainingLossValue = outputs[m_aggregatedLossFunction];
+        if (m_aggregatedEvaluationFunction)
+            m_prevMinibatchAggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
+
+        // async copy of the scalar values if on GPU
+        double* pTrainingLoss = nullptr;
+        double* pEvalCriterion = nullptr;
+        bool scalarOnGPU =
+            (m_prevMinibatchAggregateTrainingLossValue->Device() != DeviceDescriptor::CPUDevice()) ||
+            (m_aggregatedEvaluationFunction && m_prevMinibatchAggregateEvalCriterionValue->Device() != DeviceDescriptor::CPUDevice());
 
 #ifndef CPUONLY
-        auto cudaPinnedMemDeleter = [](void* p) {if (p != nullptr) CUDA_CALL(cudaFreeHost(p));};
-        static std::unique_ptr<double, decltype(cudaPinnedMemDeleter)> pinnedScalarMem(nullptr, cudaPinnedMemDeleter);
-        static cudaEvent_t scalarDoneEvent;
-        if (pinnedScalarMem == nullptr)
+        if (scalarOnGPU)
         {
-            void* pinned;
-            CUDA_CALL(cudaMallocHost(&pinned, 2 * sizeof(double))); // allocate for 2 scalars: TrainingLoss, EvalCriterion
-            pinnedScalarMem.reset((double*)pinned);
-
-            CUDA_CALL(cudaEventCreate(&scalarDoneEvent));
+            if (m_pAsyncScalarData == nullptr)
+            {
+                m_pAsyncScalarData = new TrainerAsyncScalarData;
+            }
+            auto pinnedScalars = TrainerAsyncScalarData::GetPinnedScalars(m_pAsyncScalarData);
+            pTrainingLoss = &(pinnedScalars->m_trainingLoss);
+            pEvalCriterion = &(pinnedScalars->m_evalCriterion);
         }
-        double* pTrainingLoss = pinnedScalarMem.get();
-        double* pEvalCriterion = pinnedScalarMem.get() + 1;
-#else
-        double* pTrainingLoss = &m_prevMinibatchAverageTrainingLoss;
-        double* pEvalCriterion = &m_prevMinibatchAverageEvalCriterion;
+        else
 #endif
+        {
+            pTrainingLoss = &m_prevMinibatchAverageTrainingLoss;
+            pEvalCriterion = &m_prevMinibatchAverageEvalCriterion;
+        }
 
-        m_prevMinibatchNumSamples = GetSampleCount(m_trainingSampleCountVar, outputs[m_trainingSampleCountVar]);
-        m_prevMinibatchAggregateTrainingLossValue = outputs[m_aggregatedLossFunction];
         GetScalarValueAsync(m_prevMinibatchAggregateTrainingLossValue, pTrainingLoss);
         if (m_aggregatedEvaluationFunction)
         {
-            m_prevMinibatchAggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
             GetScalarValueAsync(m_prevMinibatchAggregateEvalCriterionValue, pEvalCriterion);
         }
 
 #ifndef CPUONLY
-        cudaEventRecord(scalarDoneEvent);
+        if (scalarOnGPU) cudaEventRecord(TrainerAsyncScalarData::GetScalarDoneEvent(m_pAsyncScalarData));
 #endif
 
         for (auto outputToFetch : outputsToFetch)
@@ -392,9 +446,10 @@ namespace CNTK
 
         // TODO: Why Backward signature does not take Parameter instead of Variable for gradients?
         m_combinedTrainingFunction->Backward(backPropSate, { { m_aggregatedLossFunction, m_rootGradientValue } }, parameterGradients);
+        m_prevMinibatchNumSamples = GetSampleCount(m_trainingSampleCountVar, outputs[m_trainingSampleCountVar]);
 
 #ifndef CPUONLY
-        cudaEventSynchronize(scalarDoneEvent);
+        if (scalarOnGPU) cudaEventSynchronize(TrainerAsyncScalarData::GetScalarDoneEvent(m_pAsyncScalarData));
 #endif
 
         m_prevMinibatchAverageTrainingLoss = GetScalarValueAsyncDone(m_prevMinibatchAggregateTrainingLossValue, pTrainingLoss) / m_prevMinibatchNumSamples;
