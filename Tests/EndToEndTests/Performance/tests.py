@@ -1,57 +1,45 @@
 test_cases = {
-    "MLP::SimpleMNIST.py": {
+    "MLP::py": {
         "dir": "Examples/Image/Classification/MLP/Python",
         "exe": "python",
         "args": ["SimpleMNIST.py"]
     },
-    "MLP::01_OneHidden.cntk": {
+    "MLP::bs": {
         "dir": "Examples/Image/GettingStarted",
         "exe": "cntk",
         "args": ["configFile=01_OneHidden.cntk"]
     },
-    "ResNet20::TrainResNet_CIFAR10.py": {
+    "ResNet20::py": {
         "dir": "Examples/Image/Classification/ResNet/Python",
         "exe": "python",
         "args": ["TrainResNet_CIFAR10.py"]
     },
-    "ResNet20::ResNet20_CIFAR10.cntk": {
+    "ResNet20::bs": {
         "dir": "Examples/Image/Classification/ResNet/BrainScript",
         "exe": "cntk",
         "args": ["configFile=ResNet20_CIFAR10.cntk"]
     },
-    "ResNet110::TrainResNet_CIFAR10.py resnet110": {
+    "ResNet110::py": {
         "dir": "Examples/Image/Classification/ResNet/Python",
         "exe": "python",
         "args": ["TrainResNet_CIFAR10.py", "-n", "resnet110"]
     },
-    "ResNet110::Distributed::TrainResNet_CIFAR10.py resnet110 2-worker": {
-        "dir": "Examples/Image/Classification/ResNet/Python",
-        "exe": "python",
-        "args": ["TrainResNet_CIFAR10.py", "-n", "resnet110"],
-        "distributed": ["-n", "2"]
-    },
-    "ResNet110::ResNet110_CIFAR10.cntk": {
+    "ResNet110::bs": {
         "dir": "Examples/Image/Classification/ResNet/BrainScript",
         "exe": "cntk",
         "args": ["configFile=ResNet110_CIFAR10.cntk"]
     },
-    "ResNet110::Distributed::ResNet110_CIFAR10.cntk 2-worker": {
-        "dir": "Examples/Image/Classification/ResNet/BrainScript",
-        "exe": "cntk",
-        "args": ["configFile=ResNet110_CIFAR10.cntk"],
-        "distributed": ["-n", "2"]
-    },
-    "SLU::LanguageUnderstanding.py": {
+    "SLU::py": {
         "dir": "Examples/LanguageUnderstanding/ATIS/Python",
         "exe": "python",
         "args": ["LanguageUnderstanding.py"]
     },
-    "SLU::ATIS.cntk": {
+    "SLU::bs": {
         "dir": "Examples/LanguageUnderstanding/ATIS/BrainScript",
         "exe": "cntk",
         "args": ["configFile=ATIS.cntk"]
     },
-    "S2S::Sequence2Sequence.py": {
+    "S2S::py": {
         "dir": "Examples/SequenceToSequence/CMUDict/Python",
         "exe": "python",
         "args": ["Sequence2Sequence.py"]
