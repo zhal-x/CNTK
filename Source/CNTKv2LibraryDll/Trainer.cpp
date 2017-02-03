@@ -259,9 +259,14 @@ namespace CNTK
         outputs.insert(outputsToFetch.begin(), outputsToFetch.end());
 
         auto backPropSate = m_combinedTrainingFunction->Forward(arguments, outputs, computeDevice, { m_aggregatedLossFunction }, m_modelParametersNotCoveredByLearners);
+        m_prevMinibatchNumSamples = GetSampleCount(m_trainingSampleCountVar, outputs[m_trainingSampleCountVar]);
         m_prevMinibatchAggregateTrainingLossValue = outputs[m_aggregatedLossFunction];
+        m_prevMinibatchAverageTrainingLoss = GetScalarValue(m_prevMinibatchAggregateTrainingLossValue) / m_prevMinibatchNumSamples;
         if (m_aggregatedEvaluationFunction)
+        {
             m_prevMinibatchAggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
+            m_prevMinibatchAverageEvalCriterion = GetScalarValue(m_prevMinibatchAggregateEvalCriterionValue) / m_prevMinibatchNumSamples;
+        }
 
         for (auto outputToFetch : outputsToFetch)
         {
@@ -288,7 +293,6 @@ namespace CNTK
 
         // TODO: Why Backward signature does not take Parameter instead of Variable for gradients?
         m_combinedTrainingFunction->Backward(backPropSate, { { m_aggregatedLossFunction, m_rootGradientValue } }, parameterGradients);
-        m_prevMinibatchNumSamples = GetSampleCount(m_trainingSampleCountVar, outputs[m_trainingSampleCountVar]);
     }
 
     static std::wstring GetTrainerStateCheckpointFilePath(const std::wstring& modelFilePath)
@@ -370,19 +374,6 @@ namespace CNTK
             return externalState[key].Value<Dictionary>();
         else
             return externalState[std::to_wstring(0)].Value<Dictionary>();
-    }
-
-    double Trainer::PreviousMinibatchLossAverage() const
-    {
-        return (GetScalarValue(m_prevMinibatchAggregateTrainingLossValue) / m_prevMinibatchNumSamples);
-    }
-
-    double Trainer::PreviousMinibatchEvaluationAverage() const
-    {
-        if (!m_evaluationFunction)
-            InvalidArgument("Trainer::PreviousMinibatchEvaluationAverage: Cannot get evaluation criterion value when no evaluation function was specified during 'this' trainer's construction");
-
-        return (GetScalarValue(m_prevMinibatchAggregateEvalCriterionValue) / m_prevMinibatchNumSamples);
     }
 
     const std::vector<LearnerPtr>& Trainer::ParameterLearners() const
