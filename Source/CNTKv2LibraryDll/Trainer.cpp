@@ -25,7 +25,8 @@ namespace CNTK
           m_evaluationFunction(evaluationFunction),
           m_parameterLearners(std::make_shared<Learners>(parameterLearners)),
           m_prevMinibatchNumSamples(1),
-          m_distributed(false)
+          m_distributed(false),
+          m_has_trained(false)
     {
         // By default we set the number of threads to hardware concurrency.
         if (!Internal::MaxNumCPUThreadsSet())
@@ -177,6 +178,7 @@ namespace CNTK
 
     bool Trainer::TrainMinibatch(const std::unordered_map<Variable, MinibatchData>& arguments, std::unordered_map<Variable, ValuePtr>& outputsToFetch, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
     {
+        m_has_trained = true;
         if (!m_distributed)
             return TrainLocalMinibatch(GetInputs(arguments), outputsToFetch, IsAtSweepEnd(arguments), computeDevice);
         return TrainDistributedMinibatch(GetInputs(arguments), outputsToFetch, IsAtSweepEnd(arguments), computeDevice);
@@ -190,6 +192,7 @@ namespace CNTK
 
     bool Trainer::TrainMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, std::unordered_map<Variable, ValuePtr>& outputsToFetch, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
     {
+        m_has_trained = true;
         if (!m_distributed)
             return TrainLocalMinibatch(arguments, outputsToFetch, false, computeDevice);
         return TrainDistributedMinibatch(arguments, outputsToFetch, false, computeDevice);
@@ -374,6 +377,8 @@ namespace CNTK
 
     double Trainer::PreviousMinibatchLossAverage() const
     {
+        if (!m_has_trained)
+            LogicError("Trainer::PreviousMinibatchLossAverage: Cannot compute training loss without first calling TrainMinibatch");
         return (GetScalarValue(m_prevMinibatchAggregateTrainingLossValue) / m_prevMinibatchNumSamples);
     }
 

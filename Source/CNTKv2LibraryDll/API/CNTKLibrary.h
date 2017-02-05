@@ -4082,6 +4082,7 @@ namespace CNTK
         std::unordered_set<Parameter> m_learnerParameters;
         std::unordered_set<Variable> m_modelParametersNotCoveredByLearners;
         bool        m_distributed;
+        bool        m_has_trained;
         ValuePtr    m_rootGradientValue;
 
         size_t   m_prevMinibatchNumSamples;
