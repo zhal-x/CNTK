@@ -807,7 +807,7 @@ void CheckFindAllWithNameResult(std::vector<FunctionPtr> actual, std::wstring ex
     }
 }
 
-void TestFindName()
+void TestFindName(const DeviceDescriptor& device)
 {
     size_t inputDim = 10;
     size_t outputDim = 20;
@@ -827,7 +827,7 @@ void TestFindName()
     auto inputVar1 = InputVariable({ inputDim }, DataType::Float, L"features");
 
     auto inputPlaceholder1 = PlaceholderVariable(L"inputPlaceholder");
-    auto timesParam = CNTK::Parameter(CNTK::NDArrayView::RandomUniform<float>({ outputDim, inputDim }, -0.05, 0.05, 1, DeviceDescriptor::DefaultDevice()));
+    auto timesParam = CNTK::Parameter(CNTK::NDArrayView::RandomUniform<float>({ outputDim, inputDim }, -0.05, 0.05, 1, device));
     auto timesFunc1 = CNTK::Times(timesParam, inputPlaceholder1, timesFuncName);
     auto plusFunc1 = CNTK::Plus(Constant::Scalar(2.0f), timesFunc1, plusFuncName);
     auto plusFunc2 = CNTK::Plus(Constant::Scalar(2.0f), plusFunc1, plusFuncName);
@@ -944,9 +944,15 @@ void TestFindName()
 
 BOOST_AUTO_TEST_SUITE(FunctionSuite)
 
-BOOST_AUTO_TEST_CASE(FindName)
+BOOST_AUTO_TEST_CASE(FindNameInCPU)
 {
-    TestFindName();
+    TestFindName(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_CASE(FindNameInGPU)
+{
+    if (IsGPUAvailable())
+        TestFindName(DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(Splice)
@@ -963,7 +969,7 @@ BOOST_AUTO_TEST_CASE(ChangingParameterValuesInCPU)
 BOOST_AUTO_TEST_CASE(ChangingParameterValuesInGPU)
 {
     if (IsGPUAvailable())
-    TestChangingParameterValues<double>(3, DeviceDescriptor::GPUDevice(0));
+        TestChangingParameterValues<double>(3, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(TimesNodeShapeInference)
@@ -984,7 +990,7 @@ BOOST_AUTO_TEST_CASE(SliceInCPU)
 BOOST_AUTO_TEST_CASE(SliceInGPU)
 {
     if (IsGPUAvailable())
-    TestSlice(1, DeviceDescriptor::GPUDevice(0));
+        TestSlice(1, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(ReduceSumInCPU)
@@ -995,7 +1001,7 @@ BOOST_AUTO_TEST_CASE(ReduceSumInCPU)
 BOOST_AUTO_TEST_CASE(ReduceSumInGPU)
 {
     if (IsGPUAvailable())
-    TestReduceSum(2, DeviceDescriptor::GPUDevice(0));
+        TestReduceSum(2, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(RecurrentFunctionCloning)
@@ -1011,7 +1017,7 @@ BOOST_AUTO_TEST_CASE(TransposeInCPU)
 BOOST_AUTO_TEST_CASE(TransposeInGPU)
 {
     if (IsGPUAvailable())
-    TestTranspose(3, 1, 2, DeviceDescriptor::GPUDevice(0));
+        TestTranspose(3, 1, 2, DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(OutputVariableNameInCPU)
