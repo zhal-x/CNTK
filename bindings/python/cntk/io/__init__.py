@@ -332,6 +332,8 @@ class ImageDeserializer(Deserializer):
         self['input'] = self.input = {}
         # In ImageDeserializer, stream field names are hard-coded as "image" and "label".
         # These are configured in a somewhat inconsistent way.
+        import pdb
+        pdb.set_trace()
         if streams is not None:
             for key in streams:
                 s = streams[key]

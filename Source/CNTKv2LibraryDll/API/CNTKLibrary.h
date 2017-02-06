@@ -1380,6 +1380,18 @@ namespace CNTK
 
         CNTK_API void Add(const Dictionary& other);
 
+        void Insert(const wchar_t* key, const DictionaryValue& value)
+        {
+            operator[](key) = value;
+        }
+
+        template<typename... Args>
+        void Insert(const wchar_t* key, const DictionaryValue& value, Args... args)
+        {
+            Insert(key, value); //insert one entry
+            Insert(args...);    //recurse
+        }
+
         CNTK_API bool operator==(const Dictionary& other) const;
         CNTK_API bool operator!=(const Dictionary& other) const;
 
@@ -4074,10 +4086,8 @@ namespace CNTK
     {
         Dictionary m_atrributes;
 
-        void AddConfig(const wchar_t* key, const DictionaryValue& value);
-
-        template<typename... Args>
-        void AddConfig(const wchar_t* key, const DictionaryValue& value, Args... args);
+        friend class ImageDeserializer;
+        //void AddConfig(const wchar_t* key, const DictionaryValue& value);
 
         ImageTransform() {};
 
@@ -4106,6 +4116,36 @@ namespace CNTK
         /// 
         CNTK_API static ImageTransform Color(float brightnessRadius = 0.0f,
             float contrastRadius = 0.0f, float saturationRadius = 0.0f);
+
+        template<typename... Args>
+        void AddConfig(Args... args)
+        {
+            m_atrributes.Insert(args...);
+        }
+
+        operator DictionaryValue()  { return DictionaryValue(m_atrributes); }
+        DictionaryValue convert()  { return DictionaryValue(m_atrributes); }
+    };
+
+    class ImageDeserializer
+    {
+        Dictionary m_config;
+
+    public:
+        ImageDeserializer(const wchar_t* mapFile, const wchar_t* labelStreamName, size_t numLabels, const wchar_t* imageStreamName, const std::vector<ImageTransform>& transforms = {})
+        {
+            std::vector<DictionaryValue> actualTransforms(transforms.size());
+            //Why doesn't this work?
+            //std::transform(transforms.begin(), transforms.end(), actualTransforms.begin(), [](ImageTransform t) {return static_cast<DictionaryValue>(t); });
+            std::transform(transforms.begin(), transforms.end(), actualTransforms.begin(), [](ImageTransform t) {return t.convert(); });
+            Dictionary input;
+            Dictionary xforms;
+            Dictionary labeldim;
+            labeldim.Insert(L"labelDim", numLabels);
+            xforms.Insert(L"transforms", actualTransforms);
+            input.Insert(imageStreamName, xforms, labelStreamName, labeldim);
+            m_config.Insert(L"type", L"ImageDeserializer", L"file", mapFile, L"input", input);
+        }
     };
 
 

@@ -329,17 +329,18 @@ namespace CNTK
         m_shim->SetCurrentSamplePosition(checkpointedMinibatchSourcePosition);
     }
 
+    /*
     void ImageTransform::AddConfig(const wchar_t* key, const DictionaryValue& value)
     {
-        m_atrributes[key] = value;
+        m_atrributes.Insert(key, value);
     }
 
     template<typename... Args>
-    void ImageTransform::AddConfig(const wchar_t* key, const DictionaryValue& value, Args... args)
+    void ImageTransform::AddConfig(Args... args)
     {
-        AddConfig(key, value); //insert one entry
-        AddConfig(args...); //recurse
+        m_atrributes.Insert(args...);
     }
+    */
 
     /* static */ ImageTransform ImageTransform::Crop(const wchar_t* cropType,
             int cropSize, float sideRatio, float areaRatio,
