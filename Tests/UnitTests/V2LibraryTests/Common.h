@@ -143,7 +143,7 @@ inline void SaveAndReloadModel(FunctionPtr& functionPtr, const std::vector<Varia
     const std::wstring tempModelPath = L"feedForward.net" + std::to_wstring((int)rank);
 
     if ((_wunlink(tempModelPath.c_str()) != 0) && (errno != ENOENT))
-       BOOST_ERROR("Error deleting temp model file 'feedForward.net'");
+        BOOST_ERROR("Error deleting temp model file 'feedForward.net'");
 
     std::unordered_map<std::wstring, Variable*> inputVarUids;
     std::unordered_map<std::wstring, Variable*> outputVarNames;
@@ -448,12 +448,12 @@ inline void OpenStream(std::fstream& stream, const std::wstring& filename, bool 
     stream.exceptions(std::ios_base::badbit);  
 }
 
-inline void PrintTrainingProgress(const Trainer& trainer, size_t minibatchIdx, size_t outputFrequencyInMinibatches)
+inline void PrintTrainingProgress(const TrainerPtr trainer, size_t minibatchIdx, size_t outputFrequencyInMinibatches)
 {
-    if ((minibatchIdx % outputFrequencyInMinibatches) == 0 && trainer.PreviousMinibatchSampleCount() != 0)
+    if ((minibatchIdx % outputFrequencyInMinibatches) == 0 && trainer->PreviousMinibatchSampleCount() != 0)
     {
-        double trainLossValue = trainer.PreviousMinibatchLossAverage();
-        double evaluationValue = trainer.PreviousMinibatchEvaluationAverage();
+        double trainLossValue = trainer->PreviousMinibatchLossAverage();
+        double evaluationValue = trainer->PreviousMinibatchEvaluationAverage();
         printf("Minibatch %d: CrossEntropy loss = %.8g, Evaluation criterion = %.8g\n", (int)minibatchIdx, trainLossValue, evaluationValue);
     }
 }
@@ -673,45 +673,4 @@ inline void CompareFunctions(const FunctionPtr& first, const FunctionPtr& second
     }
 }
 
-inline  MinibatchSourcePtr CreateHTKMinibatchSource(size_t featureDim, size_t numOutputClasses, const Dictionary& readModeConfig, size_t epochSize, bool randomize = true)
-{
-    auto featuresFilePath = L"glob_0000.scp";
-    auto labelsFilePath = L"glob_0000.mlf";
-    auto labelMappingFile = L"state.list";
-
-    Dictionary featuresStreamConfig;
-    featuresStreamConfig[L"dim"] = featureDim;
-    featuresStreamConfig[L"scpFile"] = featuresFilePath;
-
-    CNTK::Dictionary featInputStreamsConfig;
-    featInputStreamsConfig[L"features"] = featuresStreamConfig;
-
-    CNTK::Dictionary featDeserializerConfiguration;
-    featDeserializerConfiguration[L"type"] = L"HTKFeatureDeserializer";
-    featDeserializerConfiguration[L"input"] = featInputStreamsConfig;
-
-    Dictionary labelsStreamConfig;
-    labelsStreamConfig[L"dim"] = numOutputClasses;
-    labelsStreamConfig[L"mlfFile"] = labelsFilePath;
-    labelsStreamConfig[L"labelMappingFile"] = labelMappingFile;
-    labelsStreamConfig[L"scpFile"] = featuresFilePath;
-
-    CNTK::Dictionary labelsInputStreamsConfig;
-    labelsInputStreamsConfig[L"labels"] = labelsStreamConfig;
-
-    CNTK::Dictionary labelsDeserializerConfiguration;
-    labelsDeserializerConfiguration[L"type"] = L"HTKMLFDeserializer";
-    labelsDeserializerConfiguration[L"input"] = labelsInputStreamsConfig;
-
-    Dictionary minibatchSourceConfiguration;
-    if (randomize)
-        minibatchSourceConfiguration[L"randomize"] = true;
-
-    minibatchSourceConfiguration[L"epochSize"] = epochSize;
-    minibatchSourceConfiguration[L"deserializers"] = std::vector<DictionaryValue>({ featDeserializerConfiguration, labelsDeserializerConfiguration });
-    minibatchSourceConfiguration.Add(readModeConfig);
-
-    return CreateCompositeMinibatchSource(minibatchSourceConfiguration);
-}
-
-
+MinibatchSourcePtr CreateHTKMinibatchSource(size_t featureDim, size_t numOutputClasses, const Dictionary& readModeConfig, size_t epochSize, bool randomize = true);

@@ -25,4 +25,6 @@ int main()
 #endif
 
     fprintf(stderr, "Evaluation complete.\n");
+
+    fflush(stderr);
 }

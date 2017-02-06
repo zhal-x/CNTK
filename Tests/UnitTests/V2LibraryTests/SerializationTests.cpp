@@ -811,6 +811,11 @@ void TestCheckpointingWithStatefulNodes(const DeviceDescriptor& device)
 
 BOOST_AUTO_TEST_SUITE(SerializationSuite)
 
+BOOST_AUTO_TEST_CASE(LoadingAModelWithALoadBatchNormFunction)
+{
+    TestLoadingAModelWithALoadBatchNormFunction();
+}
+
 BOOST_AUTO_TEST_CASE(ExceptionsAreRaisedForNonExistentPaths)
 {
     TestThatExceptionsAreRaisedForNonExistentPaths();
@@ -876,44 +881,44 @@ BOOST_AUTO_TEST_CASE(LearnerSerializationInGPU)
 {
     if (IsGPUAvailable())
     {
-    TestLearnerSerialization<float>(5, DeviceDescriptor::GPUDevice(0));
-    TestLearnerSerialization<double>(10, DeviceDescriptor::GPUDevice(0));
-}
+        TestLearnerSerialization<float>(5, DeviceDescriptor::GPUDevice(0));
+        TestLearnerSerialization<double>(10, DeviceDescriptor::GPUDevice(0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(FunctionSerializationInGPU)
 {
     if (IsGPUAvailable())
     {
-    TestFunctionSerialization(DeviceDescriptor::GPUDevice(0));
-}
+        TestFunctionSerialization(DeviceDescriptor::GPUDevice(0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(ModelSerializationDuringTrainingInGPU)
 {
     if (IsGPUAvailable())
-{
-    TestModelSerializationDuringTraining(DeviceDescriptor::GPUDevice(0));
-}
+    {
+        TestModelSerializationDuringTraining(DeviceDescriptor::GPUDevice(0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(CheckpointingInGPU)
 {
     if (IsGPUAvailable())
-    TestCheckpointing(DeviceDescriptor::GPUDevice(0));
+        TestCheckpointing(DeviceDescriptor::GPUDevice(0));
 }
 
 
 BOOST_AUTO_TEST_CASE(LegacyModelSavingInGPU)
 {
     if (IsGPUAvailable())
-    TestLegacyModelSaving(DeviceDescriptor::GPUDevice(0));
+        TestLegacyModelSaving(DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_CASE(CheckpointingWithStatefulNodesInGPU)
 {
     if (IsGPUAvailable())
-    TestCheckpointingWithStatefulNodes(DeviceDescriptor::GPUDevice(0));
+        TestCheckpointingWithStatefulNodes(DeviceDescriptor::GPUDevice(0));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

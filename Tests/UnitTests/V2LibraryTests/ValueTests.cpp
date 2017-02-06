@@ -2,6 +2,7 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
 //
+
 #include "stdafx.h"
 #include <vector>
 #define __STDC_FORMAT_MACROS
@@ -997,7 +998,6 @@ BOOST_AUTO_TEST_CASE(SettingParameterValuesManuallyInCPU)
     TestSettingParameterValuesManually(DeviceDescriptor::CPUDevice());
 }
 
-
 BOOST_AUTO_TEST_CASE(ValueCreationWithoutNDMaskInCPU)
 {
     ValueCreationNoNDMaskTest<float>(DeviceDescriptor::CPUDevice(), false);
@@ -1040,6 +1040,47 @@ BOOST_AUTO_TEST_CASE(ValueCopyToOneHotTestInCPU)
     ValueCopyToOneHotTest<double>(DeviceDescriptor::CPUDevice());
 }
 
+BOOST_AUTO_TEST_CASE(ValueCopyToExceptionsInCPU)
+{
+    ValueCopyToExceptionsTest(DeviceDescriptor::CPUDevice());
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchDenseInCPU)
+{
+    CreateBatchTestDense<float>(DeviceDescriptor::CPUDevice(), true);
+    CreateBatchTestDense<double>(DeviceDescriptor::CPUDevice(), false);
+}
+
+BOOST_AUTO_TEST_CASE(CreateSequenceDenseInCPU)
+{
+    CreateSequenceTestDense<float>(DeviceDescriptor::CPUDevice(), true);
+    CreateSequenceTestDense<double>(DeviceDescriptor::CPUDevice(), false);
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchOfSequencesDenseInCPU)
+{
+    CreateBatchOfSequencesTestDense<float>(DeviceDescriptor::CPUDevice(), true);
+    CreateBatchOfSequencesTestDense<double>(DeviceDescriptor::CPUDevice(), false);
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchOneHotInCPU)
+{
+    CreateBatchTestOneHot<float>(DeviceDescriptor::CPUDevice(), true);
+    CreateBatchTestOneHot<double>(DeviceDescriptor::CPUDevice(), false);
+}
+
+BOOST_AUTO_TEST_CASE(CreateSequenceOneHotInCPU)
+{
+    CreateSequenceTestOneHot<float>(DeviceDescriptor::CPUDevice(), true);
+    CreateSequenceTestOneHot<double>(DeviceDescriptor::CPUDevice(), false);
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchOfSequencesOneHotInCPU)
+{
+    CreateBatchOfSequencesTestOneHot<float>(DeviceDescriptor::CPUDevice(), true);
+    CreateBatchOfSequencesTestOneHot<double>(DeviceDescriptor::CPUDevice(), false);
+}
+
 BOOST_AUTO_TEST_CASE(SettingParameterValuesManuallyInGPU)
 {
     if (IsGPUAvailable())
@@ -1050,18 +1091,17 @@ BOOST_AUTO_TEST_CASE(ValueCreationWithNDMaskInGPU)
 {
     if (IsGPUAvailable())
     {
-    ValueCreationWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
-    ValueCreationWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
+        ValueCreationWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
+        ValueCreationWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
     }
-
 }
 
 BOOST_AUTO_TEST_CASE(ValueCreationWithoutNDMaskInGPU)
 {
     if (IsGPUAvailable())
     {
-    ValueCreationNoNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), false);
-    ValueCreationNoNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), true);
+        ValueCreationNoNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), false);
+        ValueCreationNoNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), true);
     }
 
 }
@@ -1070,8 +1110,8 @@ BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithoutNDMaskInGPU)
 {
     if (IsGPUAvailable())
     {
-    ValueCreationOneHotNoNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), false);
-    ValueCreationOneHotNoNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), true);
+        ValueCreationOneHotNoNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), false);
+        ValueCreationOneHotNoNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), true);
     }
 
 }
@@ -1079,42 +1119,99 @@ BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithoutNDMaskInGPU)
 BOOST_AUTO_TEST_CASE(ValueCreationOneHotWithNDMaskInGPU)
 {
     if (IsGPUAvailable())
-{
-    ValueCreationOneHotWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
-    ValueCreationOneHotWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
-}
+    {
+        ValueCreationOneHotWithNDMaskTest<float>(DeviceDescriptor::GPUDevice(0), false);
+        ValueCreationOneHotWithNDMaskTest<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(SparseSequenceBatchValueCreationInGPU)
 {
     if (IsGPUAvailable())
-{
-    SparseSequenceBatchValueCreationTest(50000, 1, DeviceDescriptor::GPUDevice(0));
-    SparseSequenceBatchValueCreationTest(6000, 6, DeviceDescriptor::GPUDevice(0));
-}
+    {
+        SparseSequenceBatchValueCreationTest(50000, 1, DeviceDescriptor::GPUDevice(0));
+        SparseSequenceBatchValueCreationTest(6000, 6, DeviceDescriptor::GPUDevice(0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(ValueCopyToDenseInGPU)
 {
     if (IsGPUAvailable())
-{
-    ValueCopyToDenseTest<float>(DeviceDescriptor::GPUDevice(0));
-    ValueCopyToDenseTest<double>(DeviceDescriptor::GPUDevice(0));
-}
+    {
+        ValueCopyToDenseTest<float>(DeviceDescriptor::GPUDevice(0));
+        ValueCopyToDenseTest<double>(DeviceDescriptor::GPUDevice(0));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(ValueCopyToOneHotInGPU)
 {
     if (IsGPUAvailable())
-{
-    ValueCopyToOneHotTest<float>(DeviceDescriptor::GPUDevice(0));
-    ValueCopyToOneHotTest<double>(DeviceDescriptor::GPUDevice(0));
-}
+    {
+        ValueCopyToOneHotTest<float>(DeviceDescriptor::GPUDevice(0));
+        ValueCopyToOneHotTest<double>(DeviceDescriptor::GPUDevice(0));
+    }
 }
 
-BOOST_AUTO_TEST_CASE(ValueCopyToExceptions)
+BOOST_AUTO_TEST_CASE(ValueCopyToExceptionsInGPU)
 {
-    ValueCopyToExceptionsTest(DeviceDescriptor::CPUDevice());
+    if (IsGPUAvailable())
+    {
+        ValueCopyToExceptionsTest(DeviceDescriptor::GPUDevice(0));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchDenseInGPU)
+{
+    if (IsGPUAvailable())
+    {
+        CreateBatchTestDense<float>(DeviceDescriptor::GPUDevice(0), false);
+        CreateBatchTestDense<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(CreateSequenceDenseInGPU)
+{
+    if (IsGPUAvailable())
+    {
+        CreateSequenceTestDense<float>(DeviceDescriptor::GPUDevice(0), false);
+        CreateSequenceTestDense<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchOfSequencesDenseInGPU)
+{
+    if (IsGPUAvailable())
+    {
+        CreateBatchOfSequencesTestDense<float>(DeviceDescriptor::GPUDevice(0), false);
+        CreateBatchOfSequencesTestDense<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchOneHotInGPU)
+{
+    if (IsGPUAvailable())
+    {
+        CreateBatchTestOneHot<float>(DeviceDescriptor::GPUDevice(0), false);
+        CreateBatchTestOneHot<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(CreateSequenceOneHotInGPU)
+{
+    if (IsGPUAvailable())
+    {
+        CreateSequenceTestOneHot<float>(DeviceDescriptor::GPUDevice(0), false);
+        CreateSequenceTestOneHot<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(CreateBatchOfSequencesOneHotInGPU)
+{
+    if (IsGPUAvailable())
+    {
+        CreateBatchOfSequencesTestOneHot<float>(DeviceDescriptor::GPUDevice(0), false);
+        CreateBatchOfSequencesTestOneHot<double>(DeviceDescriptor::GPUDevice(0), true);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -637,3 +637,5 @@ inline void CompareFunctions(const FunctionPtr& first, const FunctionPtr& second
         }
     }
 }
+
+MinibatchSourcePtr CreateHTKMinibatchSource(size_t featureDim, size_t numOutputClasses, const Dictionary& readModeConfig, size_t epochSize, bool randomize = true);

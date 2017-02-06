@@ -1013,11 +1013,18 @@ $(CNTK_CORE_BS): $(SOURCEDIR)/CNTK/BrainScript/CNTKCoreLib/CNTK.core.bs
 	cp -f $^ $@
 
 ########################################
-# V2Library CifarResNetTests
+# V2Library EndToEndTests
 ########################################
+CNTKLIBRARY_END_TO_END_TESTS_PATH =\
+	Tests/EndToEndTests/CNTKv2Library
+
+CNTKLIBRARY_END_TO_END_COMMON_SRC_PATH =\
+	$(CNTKLIBRARY_END_TO_END_TESTS_PATH)/Common
+
+INCLUDEPATH+=$(CNTKLIBRARY_END_TO_END_COMMON_SRC_PATH)
 
 CNTKLIBRARY_END_TO_END_TESTS_SRC_PATH =\
-    $(CNTKLIBRARY_END_TO_END_TESTS_PATH)/EndToEndTests
+	$(CNTKLIBRARY_END_TO_END_TESTS_PATH)/EndToEndTests
 
 CNTKLIBRARY_END_TO_END_TESTS_SRC =\
 	$(CNTKLIBRARY_END_TO_END_COMMON_SRC_PATH)/Common.cpp \
@@ -1027,7 +1034,7 @@ CNTKLIBRARY_END_TO_END_TESTS_SRC =\
 	$(CNTKLIBRARY_END_TO_END_TESTS_SRC_PATH)/Seq2Seq.cpp \
 	$(CNTKLIBRARY_END_TO_END_TESTS_SRC_PATH)/SequenceClassification.cpp \
 	$(CNTKLIBRARY_END_TO_END_TESTS_SRC_PATH)/TruncatedLSTMAcousticModel.cpp \
-	$(CNTKLIBRARY_END_TO_END_TESTS_SRC_PATH)/FrameModeTests.cpp \
+	$(CNTKLIBRARY_END_TO_END_TESTS_SRC_PATH)/FrameMode.cpp \
 
 CNTKLIBRARY_END_TO_END_TESTS:=$(BINDIR)/V2LibraryEndToEndTests
 CNTKLIBRARY_END_TO_END_TESTS_OBJ := $(patsubst %.cu, $(OBJDIR)/%.o, $(patsubst %.cpp, $(OBJDIR)/%.o, $(CNTKLIBRARY_END_TO_END_TESTS_SRC)))
@@ -1198,6 +1205,8 @@ $(UNITTEST_BRAINSCRIPT): $(UNITTEST_BRAINSCRIPT_OBJ) | $(READER_LIBS)
 ########################################
 # CNTKLibrary tests
 ########################################
+CNTKLIBRARY_TESTS_SRC_PATH =\
+	Tests/UnitTests/V2LibraryTests
 
 CNTKLIBRARY_TESTS_SRC =\
 	$(CNTKLIBRARY_END_TO_END_COMMON_SRC_PATH)/Common.cpp \
@@ -1213,6 +1222,7 @@ CNTKLIBRARY_TESTS_SRC =\
 	$(CNTKLIBRARY_TESTS_SRC_PATH)/DeviceSelectionTests.cpp \
 	$(CNTKLIBRARY_TESTS_SRC_PATH)/MinibatchSourceTest.cpp \
 	$(CNTKLIBRARY_TESTS_SRC_PATH)/UserDefinedFunctionTests.cpp \
+	$(CNTKLIBRARY_TESTS_SRC_PATH)/LoadLegacyModelTests.cpp \
 	$(CNTKLIBRARY_TESTS_SRC_PATH)/stdafx.cpp
 
 CNTKLIBRARY_TESTS := $(BINDIR)/v2librarytests
