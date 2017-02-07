@@ -157,23 +157,29 @@ namespace CNTKLibraryCSEvalExamples
         //
         public static void EvaluationSingleSequenceUsingOneHot(DeviceDescriptor device)
         {
-            var vocabToIndex = buildVocabIndex("ATIS.vocab");
-            var indexToVocab = buildInvVocabIndex("ATIS.label");
+            //var vocabToIndex = buildVocabIndex("ATIS.vocab");
+            //var indexToVocab = buildInvVocabIndex("ATIS.label");
+            var vocabToIndex = buildVocabIndex(@"C:\repos\cntk\Examples\LanguageUnderstanding\ATIS\Data\ATIS.vocab");
+            var indexToVocab = buildInvVocabIndex(@"C:\repos\cntk\Examples\LanguageUnderstanding\ATIS\Data\ATIS.label");
 
-            Function myFunc = Function.LoadModel("atis.model", device);
+            Function myFunc = Function.LoadModel(@"C:\CNTKMisc\DataBackup\ATIS\work\ATIS.slot.lstm", device);
 
             Console.WriteLine("Evaluate single sequence using one-hot vector");
 
             // Get input variable 
-            const string inputName = "features";
-            var inputVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, inputName)).Single();
+            var cwVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, "featuresCW")).Single();
+            var nwVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, "featuresNW")).Single();
+            var pwVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, "featuresPW")).Single();
 
-            uint vocabSize = inputVar.Shape.TotalSize;
+            uint vocabSize = cwVar.Shape.TotalSize;
 
             // Use case 1: Evalaute a single sequence using OneHot vector as input.
             var inputSentence = "BOS i would like to find a flight from charlotte to las vegas that makes a stop in st. louis EOS";
             // Build input data for one sequence 
-            var seqData = new List<uint>();
+            var wordIds = new List<uint>();
+            var cwSeqData = new List<uint>();
+            var nwSeqData = new List<uint>();
+            var pwSeqData = new List<uint>();
             // SeqStartFlagBatch is used to indicate whether this sequence is a new sequence (true) or concatenating the previous sequence (false).
             var seqStartFlag = true;
             // Get the index of each word in the sentence.
@@ -183,18 +189,29 @@ namespace CNTKLibraryCSEvalExamples
                 // Get the index of the word
                 var index = vocabToIndex[str];
                 // Add the sample to the sequence
-                seqData.Add(index);
+                wordIds.Add(index);
+            }
+
+            for (var i = 1; i < wordIds.Count - 1; i++)
+            {
+                cwSeqData.Add(wordIds[i]);
+                nwSeqData.Add(wordIds[i + 1]);
+                pwSeqData.Add(wordIds[i - 1]);
             }
 
             // Create input value using OneHot vector data.
-            var inputValue = Value.CreateSequence<float>(vocabSize, seqData, seqStartFlag, device);
+            var cwValue = Value.CreateSequence<float>(vocabSize, cwSeqData, seqStartFlag, device);
+            var nwValue = Value.CreateSequence<float>(vocabSize, nwSeqData, seqStartFlag, device);
+            var pwValue = Value.CreateSequence<float>(vocabSize, pwSeqData, seqStartFlag, device);
 
             // Build input data map.
             var inputDataMap = new Dictionary<Variable, Value>();
-            inputDataMap.Add(inputVar, inputValue);
+            inputDataMap.Add(cwVar, cwValue);
+            inputDataMap.Add(pwVar, pwValue);
+            inputDataMap.Add(nwVar, nwValue);
 
             // Prepare output
-            const string outputName = "out.z";
+            const string outputName = "outputs";
             Variable outputVar = myFunc.Outputs.Where(variable => string.Equals(variable.Name, outputName)).Single();
 
             // Create ouput data map. Using null as Value to indicate using system allocated memory.
@@ -205,25 +222,25 @@ namespace CNTKLibraryCSEvalExamples
             myFunc.Evaluate(inputDataMap, outputDataMap, device);
 
             // Get output result
-            var outputData = new List<List<uint>>();
+            var outputData = new List<List<float>>();
             Value outputVal = outputDataMap[outputVar];
             outputVal.CopyVariableValueTo(outputVar, outputData);
 
-            // output the result
-            var numOfElementsInSample = vocabSize;
-            uint seqNo = 0;
-            foreach (var seq in outputData)
-            {
-                Console.Write("Seq=" + seqNo + ":");
-                foreach (var index in seq)
-                {
-                    // get the word based on index
-                    Console.Write(indexToVocab[index]);
-                }
-                Console.WriteLine();
-                // next sequence.
-                seqNo++;
-            }
+            //// output the result
+            //var numOfElementsInSample = vocabSize;
+            //uint seqNo = 0;
+            //foreach (var seq in outputData)
+            //{
+            //    Console.Write("Seq=" + seqNo + ":");
+            //    foreach (var index in seq)
+            //    {
+            //        // get the word based on index
+            //        Console.Write(indexToVocab[index]);
+            //    }
+            //    Console.WriteLine();
+            //    // next sequence.
+            //    seqNo++;
+            //}
         }
 
         //
@@ -237,58 +254,83 @@ namespace CNTKLibraryCSEvalExamples
         //
         public static void EvaluationBatchOfSequencesUsingOneHot(DeviceDescriptor device)
         {
-            var vocabToIndex = buildVocabIndex("ATIS.vocab");
-            var indexToVocab = buildInvVocabIndex("ATIS.label");
+            var vocabToIndex = buildVocabIndex(@"C:\repos\cntk\Examples\LanguageUnderstanding\ATIS\Data\ATIS.vocab");
+            var indexToVocab = buildInvVocabIndex(@"C:\repos\cntk\Examples\LanguageUnderstanding\ATIS\Data\ATIS.label");
 
-            Function myFunc = Function.LoadModel("atis.model", device);
+            //Function myFunc = Function.LoadModel("atis.model", device);
+            Function myFunc = Function.LoadModel(@"C:\CNTKMisc\DataBackup\ATIS\work\ATIS.slot.lstm", device);
 
             Console.WriteLine("Evaluate batch of sequences with variable length using one-hot vector");
 
             // Get input variable 
-            const string inputName = "features";
-            var inputVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, inputName)).Single();
+            var cwVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, "featuresCW")).Single();
+            var nwVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, "featuresNW")).Single();
+            var pwVar = myFunc.Arguments.Where(variable => string.Equals(variable.Name, "featuresPW")).Single();
 
-            uint vocabSize = inputVar.Shape.TotalSize;
+
+            uint vocabSize = cwVar.Shape.TotalSize;
 
             // Prepare the input data. 
             // Each sample is represented by an index to the onehot vector, so the index of the non-zero value of each sample is saved in the inner list.
             // The outer list represents sequences contained in the batch.
-            var inputBatch = new List<List<uint>>();
+            var cwBatch = new List<List<uint>>();
+            var pwBatch = new List<List<uint>>();
+            var nwBatch = new List<List<uint>>();
             // SeqStartFlagBatch is used to indicate whether this sequence is a new sequence (true) or concatenating the previous sequence (false).
             var seqStartFlagBatch = new List<bool>();
 
             var inputSentences = new List<string>() { 
                 "BOS i would like to find a flight from charlotte to las vegas that makes a stop in st. louis EOS",
-                "BOS I want to book a flight from New York to Seattle EOS"
+                "BOS i want to book a flight from new york to seattle EOS"
             };
 
-            List<uint> seqData;
             string[] substring;
             int numOfSequences = inputSentences.Count;
             for (int seqIndex = 0; seqIndex < numOfSequences; seqIndex++)
             {
-                // The input for one sequence 
-                seqData = new List<uint>();
+                var wordIds = new List<uint>();
+                var cwSeqData = new List<uint>();
+                var nwSeqData = new List<uint>();
+                var pwSeqData = new List<uint>();
+                
                 // Get the index of each word in the sentence.
                 substring = inputSentences[seqIndex].Split(' ');
                 foreach (var str in substring)
                 {
+                    // Get the index of the word
                     var index = vocabToIndex[str];
-                    seqData.Add(index);
+                    // Add the sample to the sequence
+                    wordIds.Add(index);
                 }
-                inputBatch.Add(seqData);
-                seqStartFlagBatch.Add(true);
+
+                for (var i = 1; i < wordIds.Count - 1; i++)
+                {
+                    cwSeqData.Add(wordIds[i]);
+                    nwSeqData.Add(wordIds[i + 1]);
+                    pwSeqData.Add(wordIds[i - 1]);
+                }
+                cwBatch.Add(cwSeqData);
+                nwBatch.Add(nwSeqData);
+                pwBatch.Add(pwSeqData);
             }
 
             // Create the Value representing the batch data.
-            var inputValue = Value.CreateBatchOfSequences<float>(vocabSize, inputBatch, seqStartFlagBatch, DeviceDescriptor.CPUDevice);
+            //var cwValue = Value.CreateBatchOfSequences<float>(vocabSize, cwBatch, seqStartFlagBatch, DeviceDescriptor.CPUDevice);
+            //var pwValue = Value.CreateBatchOfSequences<float>(vocabSize, pwBatch, seqStartFlagBatch, DeviceDescriptor.CPUDevice);
+            //var nwValue = Value.CreateBatchOfSequences<float>(vocabSize, nwBatch, seqStartFlagBatch, DeviceDescriptor.CPUDevice);
+            var cwValue = Value.CreateBatchOfSequences<float>(vocabSize, cwBatch, DeviceDescriptor.CPUDevice);
+            var pwValue = Value.CreateBatchOfSequences<float>(vocabSize, pwBatch, DeviceDescriptor.CPUDevice);
+            var nwValue = Value.CreateBatchOfSequences<float>(vocabSize, nwBatch, DeviceDescriptor.CPUDevice);
+
 
             // Build input data map.
             var inputDataMap = new Dictionary<Variable, Value>();
-            inputDataMap.Add(inputVar, inputValue);
+            inputDataMap.Add(cwVar, cwValue);
+            inputDataMap.Add(pwVar, pwValue);
+            inputDataMap.Add(nwVar, nwValue);
 
             // Prepare output
-            const string outputName = "out.z";
+            const string outputName = "outputs";
             Variable outputVar = myFunc.Outputs.Where(variable => string.Equals(variable.Name, outputName)).Single();
 
             // Create ouput data map. Using null as Value to indicate using system allocated memory.
@@ -299,25 +341,25 @@ namespace CNTKLibraryCSEvalExamples
             myFunc.Evaluate(inputDataMap, outputDataMap, device);
 
             // Get evaluation result.
-            var outputData = new List<List<uint>>();
+            var outputData = new List<List<float>>();
             var outputVal = outputDataMap[outputVar];
             outputVal.CopyVariableValueTo(outputVar, outputData);
 
             // output the result
-            var numOfElementsInSample = vocabSize;
-            uint seqNo = 0;
-            foreach (var seq in outputData)
-            {
-                Console.Write("Seq=" + seqNo + ":");
-                foreach (var index in seq)
-                {
-                    // get the word based on index
-                    Console.Write(indexToVocab[index]);
-                }
-                Console.WriteLine();
-                // next sequence.
-                seqNo++;
-            }
+            //var numOfElementsInSample = vocabSize;
+            //uint seqNo = 0;
+            //foreach (var seq in outputData)
+            //{
+            //    Console.Write("Seq=" + seqNo + ":");
+            //    foreach (var index in seq)
+            //    {
+            //        // get the word based on index
+            //        Console.Write(indexToVocab[index]);
+            //    }
+            //    Console.WriteLine();
+            //    // next sequence.
+            //    seqNo++;
+            //}
         }
 
         private static void PrintOutput<T>(uint sampleSize, List<List<T>> outputBuffer)

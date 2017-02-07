@@ -16,6 +16,9 @@ namespace CNTKLibraryCSEvalExamples
         {
             Console.WriteLine("======== Evaluate model using C# ========");
 
+            CNTKLibraryManagedExamples.EvaluationSingleSequenceUsingOneHot(DeviceDescriptor.CPUDevice);
+            CNTKLibraryManagedExamples.EvaluationBatchOfSequencesUsingOneHot(DeviceDescriptor.CPUDevice);
+
             CNTKLibraryManagedExamples.EvaluationSingleImage(DeviceDescriptor.CPUDevice);
             CNTKLibraryManagedExamples.EvaluationBatchOfImages(DeviceDescriptor.CPUDevice);
             //TODO: Add examples with OneHot.
