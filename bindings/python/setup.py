@@ -161,8 +161,23 @@ else:
     kwargs = dict(package_data = package_data)
 
 setup(name="cntk",
-      version="2.0.beta10.0",
+      version="2.0b12",
+      description='Microsoft Cognitive Toolkit',
+	  long_description='Microsoft Cognitive Toolkit (long)',
       url="http://cntk.ai",
+	  author='Microsoft Corporation',
+	  author_email='cntkhelp@microsoft.com',
+	  license='MIT',
+	  classifiers=[
+		'Development Status :: 4 - Beta',
+		'License :: OSI Approved :: MIT License',
+		'Operating System :: Microsoft :: Windows',
+		'Operating System :: POSIX :: Linux',
+		'Programming Language :: Python',
+		'Programming Language :: Python :: 3.5',
+		'Programming Language :: Python :: 3.4',
+		'Programming Language :: Python :: 2.7',
+      ],
       ext_modules=[cntk_module],
       packages=packages,
       # install_requires=[
