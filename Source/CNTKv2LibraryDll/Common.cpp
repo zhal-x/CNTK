@@ -119,6 +119,16 @@ namespace CNTK
                 profilerSyncGpu);
         }
 
+        void EnableProfiler()
+        {
+            Microsoft::MSR::CNTK::ProfilerEnable(true);
+        }
+
+        void DisableProfiler()
+        {
+            Microsoft::MSR::CNTK::ProfilerEnable(false);
+        }
+
         void StopProfiler()
         {
             Microsoft::MSR::CNTK::ProfilerClose();

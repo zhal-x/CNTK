@@ -97,7 +97,7 @@ def create_trainer(network, minibatch_size, epoch_size, num_quantization_bits, b
     return Trainer(network['output'], network['ce'], network['pe'], learner)
 
 # Train and test
-def train_and_test(network, trainer, train_source, test_source, progress_printer, minibatch_size, epoch_size, profiler_dir):
+def train_and_test(network, trainer, train_source, test_source, progress_printer, minibatch_size, epoch_size, profiler_dir=None):
 
     # define mapping from intput streams to network inputs
     input_map = {
@@ -109,7 +109,7 @@ def train_and_test(network, trainer, train_source, test_source, progress_printer
         cntk.minibatch_size_schedule(minibatch_size), progress_printer, input_map, "ConvNet_CIFAR10_DataAug_", epoch_size)
     
     if profiler_dir:
-        start_profiler(profiler_dir)
+        start_profiler(profiler_dir, True)
         
     training_session.train()
     

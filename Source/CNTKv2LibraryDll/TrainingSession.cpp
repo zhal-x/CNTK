@@ -79,8 +79,6 @@ namespace CNTK
         size_t workerRank = 0, numberOfWorkers = 1;
         size_t samplesInEpoch = 0;
 
-        Microsoft::MSR::CNTK::ProfilerEnable(true); // This has effect only if the profiler is globally enabled by StartProfiler()
-
         while (shouldTrain)
         {
             // Check if we are operating in distributed mode.
@@ -118,6 +116,10 @@ namespace CNTK
                     samplesInEpoch = 0;
                     m_currentCheckpointIndex = checkpointIndex;
                     SaveCheckpoint();
+
+                    // enable profiler after the first checkpoint
+                    // This has effect only if the profiler is globally enabled by StartProfiler()
+                    Microsoft::MSR::CNTK::ProfilerEnable(true);
                 }
             }
         }
