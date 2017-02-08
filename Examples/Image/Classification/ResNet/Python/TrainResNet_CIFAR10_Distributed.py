@@ -15,7 +15,7 @@ from cntk.utils import *
 from cntk.ops import input_variable, cross_entropy_with_softmax, classification_error
 from cntk import Trainer, cntk_py 
 from cntk.learner import momentum_sgd, learning_rate_schedule, momentum_as_time_constant_schedule, UnitType
-from _cntk_py import set_computation_network_trace_level
+from _cntk_py import set_computation_network_trace_level, start_profiler, stop_profiler
 from cntk.device import set_default_device, gpu
 from cntk.distributed import data_parallel_distributed_learner, block_momentum_distributed_learner, Communicator
 
@@ -97,7 +97,7 @@ def create_trainer(network, minibatch_size, epoch_size, num_quantization_bits, b
     return Trainer(network['output'], network['ce'], network['pe'], learner)
 
 # Train and test
-def train_and_test(network, trainer, train_source, test_source, progress_printer, minibatch_size, epoch_size):
+def train_and_test(network, trainer, train_source, test_source, progress_printer, minibatch_size, epoch_size, profiler_dir):
 
     # define mapping from intput streams to network inputs
     input_map = {
@@ -108,12 +108,13 @@ def train_and_test(network, trainer, train_source, test_source, progress_printer
     training_session = cntk.training_session(train_source, trainer,
         cntk.minibatch_size_schedule(minibatch_size), progress_printer, input_map, "ConvNet_CIFAR10_DataAug_", epoch_size)
     
-    from _cntk_py import start_profiler, stop_profiler
-    start_profiler()
-    
+    if profiler_dir:
+        start_profiler(profiler_dir)
+        
     training_session.train()
     
-    stop_profiler()
+    if profiler_dir:
+        stop_profiler()
 
     # TODO: Stay tuned for an upcoming simpler EvalSession API for test/validation.
     epoch_size     = 10000
@@ -144,7 +145,7 @@ def train_and_test(network, trainer, train_source, test_source, progress_printer
     return metric_numer/metric_denom
 
 # Train and evaluate the network.
-def resnet_cifar10(train_data, test_data, mean_data, network_name, epoch_size, num_quantization_bits=32, block_size=3200, warm_up=0, max_epochs=5, log_to_file=None, num_mbs_per_log=None, gen_heartbeat=False, scale_up=False):
+def resnet_cifar10(train_data, test_data, mean_data, network_name, epoch_size, num_quantization_bits=32, block_size=3200, warm_up=0, max_epochs=5, log_to_file=None, num_mbs_per_log=None, gen_heartbeat=False, scale_up=False, profiler_dir=None):
 
     set_computation_network_trace_level(0)
     
@@ -166,7 +167,7 @@ def resnet_cifar10(train_data, test_data, mean_data, network_name, epoch_size, n
     trainer = create_trainer(network, minibatch_size, epoch_size, num_quantization_bits, block_size, warm_up)
     train_source = create_image_mb_source(train_data, mean_data, train=True, total_number_of_samples=max_epochs * epoch_size)
     test_source = create_image_mb_source(test_data, mean_data, train=False, total_number_of_samples=cntk.io.FULL_DATA_SWEEP)
-    return train_and_test(network, trainer, train_source, test_source, progress_printer, minibatch_size, epoch_size)
+    return train_and_test(network, trainer, train_source, test_source, progress_printer, minibatch_size, epoch_size, profiler_dir)
 
 
 if __name__=='__main__':
@@ -185,7 +186,7 @@ if __name__=='__main__':
     parser.add_argument('-b', '--block_samples', type=int, help="Number of samples per block for block momentum (BM) distributed learner (if 0 BM learner is not used)", required=False, default=None)
     parser.add_argument('-a', '--distributed_after', help='Number of samples to train with before running distributed', type=int, required=False, default='0')
     parser.add_argument('-device', '--device', type=int, help="Force to run the script on a specified device", required=False, default=None)
-
+    parser.add_argument('-p', '--profiler_dir', help='directory for saving profiler output', required=False, default=None)
 
     args = vars(parser.parse_args())
 
@@ -221,7 +222,8 @@ if __name__=='__main__':
                        warm_up=args['distributed_after'],
                        max_epochs=epochs,
                        scale_up=scale_up,
-                       log_to_file=args['log'])
+                       log_to_file=args['log'],
+                       profiler_dir=args['profiler_dir'])
     finally:
         # Must call MPI finalize when process exit
         Communicator.finalize()

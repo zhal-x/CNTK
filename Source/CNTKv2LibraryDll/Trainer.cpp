@@ -212,6 +212,8 @@ namespace CNTK
         std::unordered_map<Variable, ValuePtr> parameterGradients;
         ExecuteForwardBackward(arguments, outputsToFetch, computeDevice, parameterGradients);
 
+        auto profWeights = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainWeights);
+
         std::unordered_map<Parameter, NDArrayViewPtr> gradients;
         for (const auto& parameter : m_learnerParameters)
             gradients[parameter] = parameterGradients[parameter]->Data();

@@ -83,7 +83,6 @@ namespace CNTK
 
         while (shouldTrain)
         {
-            auto profMinibatch = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainMinibatch);
             // Check if we are operating in distributed mode.
             if (m_parallelAfterSamples >= m_trainer->TotalNumberOfSamplesSeen())
             {
