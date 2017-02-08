@@ -6,6 +6,7 @@
 #include "stdafx.h"
 #include "CNTKLibrary.h"
 #include "fileutil.h"
+#include "PerformanceProfiler.h"
 
 namespace CNTK
 {
@@ -77,8 +78,12 @@ namespace CNTK
         bool shouldTrain = true;
         size_t workerRank = 0, numberOfWorkers = 1;
         size_t samplesInEpoch = 0;
+
+        Microsoft::MSR::CNTK::ProfilerEnable(true); // This has effect only if the profiler is globally enabled by StartProfiler()
+
         while (shouldTrain)
         {
+            auto profMinibatch = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainMinibatch);
             // Check if we are operating in distributed mode.
             if (m_parallelAfterSamples >= m_trainer->TotalNumberOfSamplesSeen())
             {
@@ -99,6 +104,8 @@ namespace CNTK
             OnMinibatchStart();
             shouldTrain = m_trainer->TrainMinibatch(minibatch, computeDevice);
             OnMinibatchEnd();
+
+            auto profMisc = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainPost);
 
             // Local number of samples.
             samplesInEpoch += m_trainer->PreviousMinibatchSampleCount();
