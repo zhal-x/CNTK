@@ -69,13 +69,15 @@ def simple_mnist():
     }
 
     lr_per_minibatch = learning_rate_schedule(0.2, UnitType.minibatch)
-    # Instantiate the trainer object to drive the model training
-    trainer = Trainer(netout, ce, pe, sgd(netout.parameters, lr=lr_per_minibatch))
 
-    # Instantiate a ProgressPrinter.
+    # Instantiate progress writers.
     logdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mnist_log")
     tensorboard_writer = TensorBoardProgressWriter(freq=1, log_dir=logdir, model=netout)
-    progress_writers = ProgressWriters(ProgressPrinter(tag='Training', freq=10), tensorboard_writer)
+    progress_printer = ProgressPrinter(tag='Training', freq=10)
+
+    # Instantiate the trainer object to drive the model training
+    learner = sgd(netout.parameters, lr=lr_per_minibatch)
+    trainer = Trainer(netout, ce, pe, learner, [tensorboard_writer, progress_printer])
 
     # Get minibatches of images to train with and perform model training
     minibatch_size = 64
@@ -86,9 +88,6 @@ def simple_mnist():
     for minibatch_idx in range(0, int(num_minibatches_to_train)):
         trainer.train_minibatch(reader_train.next_minibatch(minibatch_size, input_map=input_map))
 
-        # Take snapshot of loss and eval criterion for the previous minibatch.
-        progress_writers.update_with_trainer(trainer, with_metric=True)
-
         # Log max/min/mean of each parameter tensor, so that we can confirm that the parameters change indeed.
         # Don't want to do that very often though, otherwise will spend too much time computing min/max/mean.
         if minibatch_idx % 10 == 9:
@@ -97,7 +96,7 @@ def simple_mnist():
                 tensorboard_writer.write_value(p.uid + "/min", reduce_min(p).eval(), minibatch_idx)
                 tensorboard_writer.write_value(p.uid + "/mean", reduce_mean(p).eval(), minibatch_idx)
 
-    progress_writers.close()
+    tensorboard_writer.close()
 
     # Load test data
     try:

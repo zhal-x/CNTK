@@ -4,6 +4,7 @@
 # for full license information.
 # ==============================================================================
 from __future__ import print_function
+import os
 import time
 
 
@@ -41,26 +42,45 @@ class BaseProgressWriter(object):
         self.epochs = 0
         self.epoch_start_time = 0
 
-    def update_with_trainer(self, trainer, with_metric=False):
+    def update_training(self, samples, avg_loss, avg_metric=None):
         '''
-        Update the current loss, the minibatch size and optionally the metric using the information from the
-        ``trainer``.
+        Updates the writer with the recent training results.
 
         Args:
-            trainer (:class:`cntk.trainer.Trainer`): trainer from which information is gathered
-            with_metric (`bool`): whether to update the metric accumulators
+            samples (`int`): number of samples used in training since the last call to this function.
+            avg_loss (`float`): average value of a loss function per sample.
+            avg_metric (`float` or `None`, default `None`): optionally, average value of a metric per sample.
         '''
-        if self.updates_since_start:
-            # Only warn once per epoch to avoid flooding with warnings.
-            _warn_deprecated('Use ProgressPrinter.update_progress() instead.')
-        if trainer.previous_minibatch_sample_count == 0:
-            return
-        self._update_progress(
-            trainer.previous_minibatch_sample_count,
-            trainer.previous_minibatch_loss_average,
-            trainer.previous_minibatch_evaluation_average if with_metric else None)
+        self.samples_since_start += samples
+        self.samples_since_last += samples
+        self.loss_since_start += avg_loss * samples
+        self.loss_since_last += avg_loss * samples
+        self.updates_since_start += 1
+        self.total_updates += 1
 
-    def summarize_progress(self, with_metric=False):
+        if avg_metric is not None:
+            self.metric_since_start += avg_metric * samples
+            self.metric_since_last += avg_metric * samples
+
+        if self.epoch_start_time == 0:
+            self.epoch_start_time = time.time()
+
+        if self.freq == 0 and (self.updates_since_start + 1) & self.updates_since_start == 0:
+            last_avg_loss, last_avg_metric, last_num_samples = self._reset_last()
+            self._write_progress_update(last_num_samples, last_avg_loss,
+                                        last_avg_metric if avg_metric is not None else None, 0)
+        elif self.freq > 0 and (self.updates_since_start % self.freq == 0 or self.updates_since_start <= self.first):
+            last_avg_loss, last_avg_metric, last_num_samples = self._reset_last()
+
+            if self.updates_since_start <= self.first:  # updates for individual MBs
+                first_mb = self.updates_since_start
+            else:
+                first_mb = max(self.updates_since_start - self.freq + 1, self.first + 1)
+
+            self._write_progress_update(last_num_samples, last_avg_loss,
+                                        last_avg_metric if avg_metric is not None else None, first_mb)
+
+    def write_training_summary(self, with_metric=False):
         '''
         Write a summary of progress since the last call to this function.
 
@@ -77,13 +97,6 @@ class BaseProgressWriter(object):
         time_delta = epoch_end_time - self.epoch_start_time
         self.epoch_start_time = epoch_end_time
         return self._write_progress_summary(samples, avg_loss, avg_metric if with_metric else None, time_delta)
-
-    def close(self, *args, **kwargs):
-        '''
-        Make sure that any outstanding records are immediately persisted, then close any open files.
-        Any subsequent attempt to use the object will cause a RuntimeError.
-        '''
-        self._close(*args, **kwargs)
 
     def _avg_loss_since_start(self):
         return self.loss_since_start / self.samples_since_start
@@ -112,43 +125,11 @@ class BaseProgressWriter(object):
         self.samples_since_last = 0
         return ret
 
-    def _update_progress(self, samples, loss, metric=None):
-        self.samples_since_start += samples
-        self.samples_since_last += samples
-        self.loss_since_start += loss * samples
-        self.loss_since_last += loss * samples
-        self.updates_since_start += 1
-        self.total_updates += 1
-
-        if metric is not None:
-            self.metric_since_start += metric * samples
-            self.metric_since_last += metric * samples
-
-        if self.epoch_start_time == 0:
-            self.epoch_start_time = time.time()
-
-        if self.freq == 0 and (self.updates_since_start + 1) & self.updates_since_start == 0:
-            avg_loss, avg_metric, num_samples = self._reset_last()
-            self._write_progress_update(num_samples, avg_loss, avg_metric if metric is not None else None, 0)
-        elif self.freq > 0 and (self.updates_since_start % self.freq == 0 or self.updates_since_start <= self.first):
-            avg_loss, avg_metric, num_samples = self._reset_last()
-
-            if self.updates_since_start <= self.first:  # updates for individual MBs
-                first_mb = self.updates_since_start
-            else:
-                first_mb = max(self.updates_since_start - self.freq + 1, self.first + 1)
-
-            self._write_progress_update(num_samples, avg_loss, avg_metric if metric is not None else None, first_mb)
-
     def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
     def _write_progress_summary(self, samples, avg_loss, avg_metric, time_delta):
-        # To be overriden in derived classes.
-        raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
-
-    def _close(self, *args, **kwargs):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
@@ -242,12 +223,9 @@ class ProgressPrinter(BaseProgressWriter):
         _warn_deprecated('The method was deprecated.')
         return self._avg_metric_since_last()
 
-    def log(self, message):
-        self._logprint(message)
-
     def update(self, loss, minibatch_size, metric=None):
         '''
-        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_with_trainer` instead.
+        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_training` instead.
 
         Updates the accumulators using the loss, the minibatch_size and the optional metric.
 
@@ -260,11 +238,32 @@ class ProgressPrinter(BaseProgressWriter):
         if self.updates_since_start > 0:
             # Only warn once per epoch to avoid flooding with warnings.
             _warn_deprecated('Use ProgressPrinter.update_with_trainer() instead.')
-        self._update_progress(minibatch_size, loss, metric)
+        self.update_training(minibatch_size, loss, metric)
+
+    def update_with_trainer(self, trainer, with_metric=False):
+        '''
+        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_training` instead.
+
+        Update the current loss, the minibatch size and optionally the metric using the information from the
+        ``trainer``.
+
+        Args:
+            trainer (:class:`cntk.trainer.Trainer`): trainer from which information is gathered
+            with_metric (`bool`): whether to update the metric accumulators
+        '''
+        if self.updates_since_start:
+            # Only warn once per epoch to avoid flooding with warnings.
+            _warn_deprecated('Use ProgressPrinter.update_progress() instead.')
+        if trainer.previous_minibatch_sample_count == 0:
+            return
+        self.update_training(
+            trainer.previous_minibatch_sample_count,
+            trainer.previous_minibatch_loss_average,
+            trainer.previous_minibatch_evaluation_average if with_metric else None)
 
     def epoch_summary(self, with_metric=False):
         '''
-        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.summarize_progress` instead.
+        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.write_training_summary` instead.
 
         If on an arithmetic schedule print an epoch summary using the 'start' accumulators.
         If on a geometric schedule does nothing.
@@ -273,23 +272,25 @@ class ProgressPrinter(BaseProgressWriter):
             with_metric (`bool`): if `False` it only prints the loss, otherwise it prints both the loss and the metric
         '''
         _warn_deprecated('Use ProgressPrinter.summarize_progress() instead.')
-        return self.summarize_progress(with_metric)
+        return self.write_training_summary(with_metric)
 
     def end_progress_print(self, msg=""):
         '''
-        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.close` instead.
-
-        Prints the given message signifying the end of training.
+        DEPRECATED. Prints the given message signifying the end of training.
 
         Args:
-            msg (`string`): message to print.
+            msg (`string`, default ''): message to print.
         '''
-        _warn_deprecated('Use ProgressPrinter.close() instead.')
-        self.close(msg)
+        self._logprint('CNTKCommandTrainEnd: train')
+        if msg != "" and self.log_to_file is not None:
+            self._logprint(msg)
 
-    def _update_progress(self, samples, loss, metric=None):
+    def log(self, message):
+        self._logprint(message)
+
+    def update_training(self, samples, avg_loss, avg_metric=None):
         # Override for BaseProgressWriter._update_progress.
-        super(ProgressPrinter, self)._update_progress(samples, loss, metric)
+        super(ProgressPrinter, self).update_training(samples, avg_loss, avg_metric)
         self._generate_progress_heartbeat()
 
     def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
@@ -329,15 +330,6 @@ class ProgressPrinter(BaseProgressWriter):
 
         return avg_loss, avg_metric, samples
 
-    def _close(self, msg=""):
-        # Override for BaseProgressWriter._close.
-        if self.log_to_file is not None:
-            # This is different from the previous implementation of end_progress_print() which always printed
-            # the below line, even to console.
-            self._logprint('CNTKCommandTrainEnd: train')
-            if msg != "":
-                self._logprint(msg)
-
     def _logprint(self, logline):
         if self.log_to_file is None:
             # to stdout.  if distributed, all ranks merge output into stdout
@@ -363,7 +355,7 @@ class TensorBoardProgressWriter(BaseProgressWriter):
     The generated files can be opened in TensorBoard to visualize the progress.
     '''
 
-    def __init__(self, freq=None, log_dir='.', model=None):
+    def __init__(self, freq=None, log_dir='.', rank=None, model=None):
         '''
         Constructor.
 
@@ -375,12 +367,17 @@ class TensorBoardProgressWriter(BaseProgressWriter):
               `:func:cntk.util.TensorBoardFileWriter.summarize_progress` is invoked.
               Must be a positive integer otherwise.
             log_dir (`string`, default '.'): directory where to create a TensorBoard event file.
+            rank (`int` or `None`, default `None`): rank of a worker when using distributed training, or `None` if
+             training locally. If not `None`, event files will be created in log_dir/rank[rank] rather than log_dir.
             model (:class:`cntk.ops.Function` or `None`, default `None`): model graph to plot.
         '''
         if (freq is not None) and (freq <= 0):
             raise ValueError('frequency cannot be a negative number')
 
         super(TensorBoardProgressWriter, self).__init__(frequency=freq)
+
+        if rank is not None:
+            log_dir = os.path.join(log_dir, 'rank' + str(rank))
 
         from cntk import cntk_py
         self.writer = cntk_py.TensorBoardFileWriter(log_dir, model)
@@ -406,84 +403,28 @@ class TensorBoardProgressWriter(BaseProgressWriter):
 
         self.writer.flush()
 
-    def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
-        # Override for BaseProgressWriter._write_progress_update.
-        self.write_value('minibatch/avg_loss', avg_loss, self.total_updates)
-        if avg_metric is not None:
-            self.write_value('minibatch/avg_metric', avg_metric * 100.0, self.total_updates)
-
-    def _write_progress_summary(self, samples, avg_loss, avg_metric, time_delta):
-        # Override for BaseProgressWriter._write_progress_summary.
-        self.write_value('summary/avg_loss', avg_loss, self.epochs)
-        if avg_metric is not None:
-            self.write_value('summary/avg_metric', avg_metric * 100.0, self.epochs)
-
-    def _close(self, *args, **kwargs):
-        # Override for BaseProgressWriter._close.
+    def close(self):
+        '''
+        Make sure that any outstanding records are immediately persisted, then close any open files.
+        Any subsequent attempt to use the object will cause a RuntimeError.
+        '''
         if self.writer is None:
             raise RuntimeError('Attempting to use a closed TensorBoardProgressWriter')
 
         self.writer.close()
         self.writer = None
 
+    def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
+        # Override for BaseProgressWriter._write_progress_update.
+        self.write_value('train/avg_loss_mb', avg_loss, self.total_updates)
+        if avg_metric is not None:
+            self.write_value('train/avg_metric_mb', avg_metric * 100.0, self.total_updates)
 
-class ProgressWriters(object):
-    '''Allows using multiple progress writers as if they were one.'''
-
-    def __init__(self, *writers):
-        '''
-        Constructor.
-
-        Args:
-            *writers (:class:`cntk.utils.BaseProgressTracker`): list of progress writers to use.
-        '''
-        if not writers:
-            raise ValueError("No progress writers specified")
-
-        for writer in writers:
-            if not isinstance(writer, BaseProgressWriter):
-                raise ValueError("All ProgressTracker arguments must be derived from BaseProgressWriter")
-
-        self.writers = writers
-
-    def update_with_trainer(self, trainer, with_metric=False):
-        '''
-        Update all writers with the current loss, the minibatch size and optionally the metric using the information
-        from the ``trainer``.
-
-        Args:
-            trainer (:class:`cntk.trainer.Trainer`): trainer from which information is gathered
-            with_metric (`bool`): whether to update the metric accumulators
-        '''
-        if self.writers is None:
-            raise RuntimeError('Attempting to use a closed ProgressTracker')
-
-        for writer in self.writers:
-            writer.update_with_trainer(trainer, with_metric)
-
-    def summarize_progress(self, with_metric=False):
-        '''
-        Invoke all writers to summarize progress so far.
-
-        Args:
-            with_metric (`bool`, default `False`): indicates whether the metric summary should be included in the
-             output of all writers.
-        '''
-        if self.writers is None:
-            raise RuntimeError('Attempting to use a closed ProgressTracker')
-
-        for writer in self.writers:
-            writer.summarize_progress(with_metric)
-
-    def close(self, *args, **kwargs):
-        '''Close all writers. Any subsequent attempt to use the object will cause a RuntimeError.'''
-        if self.writers is None:
-            raise RuntimeError('Attempting to use a closed ProgressTracker')
-
-        for writer in self.writers:
-            writer.close(*args, **kwargs)
-
-        self.writers = None
+    def _write_progress_summary(self, samples, avg_loss, avg_metric, time_delta):
+        # Override for BaseProgressWriter._write_progress_summary.
+        self.write_value('train/avg_loss_summary', avg_loss, self.epochs)
+        if avg_metric is not None:
+            self.write_value('train/avg_metric_summary', avg_metric * 100.0, self.epochs)
 
 
 # print the total number of parameters to log

@@ -86,15 +86,11 @@ class MockProgressPrinter:
         self.expected_cv = expected_cv
         self.minibatch_info = []
 
-    def update_with_trainer(self, trainer, with_metric):
+    def update_training(self, samples, avg_loss, avg_metric):
         self.minibatch_info.append(
-            (self.epoch_summary_counter,
-             (trainer.previous_minibatch_loss_average,
-              trainer.previous_minibatch_evaluation_average,
-              trainer.previous_minibatch_sample_count,
-              trainer.total_number_of_samples_seen)))
+            (self.epoch_summary_counter, (avg_loss, avg_metric, samples)))
 
-    def epoch_summary(self, with_metric):
+    def write_training_summary(self, with_metric):
         self.epoch_summary_counter += 1
 
     def log(self, msg):
