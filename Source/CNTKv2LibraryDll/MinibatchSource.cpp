@@ -329,19 +329,6 @@ namespace CNTK
         m_shim->SetCurrentSamplePosition(checkpointedMinibatchSourcePosition);
     }
 
-    /*
-    void ImageTransform::AddConfig(const wchar_t* key, const DictionaryValue& value)
-    {
-        m_atrributes.Insert(key, value);
-    }
-
-    template<typename... Args>
-    void ImageTransform::AddConfig(Args... args)
-    {
-        m_atrributes.Insert(args...);
-    }
-    */
-
     /* static */ ImageTransform ImageTransform::Crop(const wchar_t* cropType,
             int cropSize, float sideRatio, float areaRatio,
             float aspectRatio, const wchar_t* jitterType)
@@ -388,5 +375,78 @@ namespace CNTK
             L"contrastRadius", contrastRadius,
             L"saturationRadius", saturationRadius);
         return color;
+    }
+
+    /* static */ Deserializer Deserializer::ImageDeserializer(const std::wstring& fileName, const std::wstring& labelStreamName, size_t numLabels, const std::wstring& imageStreamName, const std::vector<ImageTransform>& transforms)
+    {
+        Deserializer img;
+        std::vector<DictionaryValue> actualTransforms;
+        //TODO: make this work with implicit conversion 
+        std::transform(transforms.begin(), transforms.end(), std::back_inserter(actualTransforms), [](ImageTransform t) { return t.toDictionaryValue(); });
+        Dictionary labeldim;
+        labeldim[L"labelDim"] = numLabels;
+        Dictionary xforms;
+        xforms[L"transforms"] = actualTransforms;
+        Dictionary input;
+        input[imageStreamName] = xforms;
+        input[labelStreamName] = labeldim;
+        img.AddConfig(L"type", L"ImageDeserializer", L"file", fileName, L"input", input);
+        return img;
+    }
+
+    /* static */ Deserializer Deserializer::CTFDeserializer(const std::wstring& fileName, const std::vector<StreamConfiguration>& streams)
+    {
+        Deserializer ctf;
+        Dictionary input;
+        for (const auto& s : streams)
+        {
+            const auto& key = s.m_streamName;
+            Dictionary stream;
+            stream[L"alias"] = s.m_streamAlias;
+            stream[L"dim"] = s.m_dim;
+            stream[L"format"] = s.m_isSparse ? L"sparse" : L"dense";
+            input[key] = stream;
+        }
+        ctf.AddConfig(L"type", L"CNTKTextFormatDeserializer", L"file", fileName, L"input", input);
+        return ctf;
+    }
+
+    /* static */ Deserializer Deserializer::HTKFeatureDeserializer(const std::wstring& fileName, size_t dimension, size_t leftContextSize, size_t rightContextSize, const std::wstring& prefixPath)
+    {
+        Deserializer htk;
+        std::vector<DictionaryValue> ctxWindow = { DictionaryValue(leftContextSize), DictionaryValue(rightContextSize) };
+        htk.AddConfig(L"scpFile", fileName, L"dim", dimension, L"contextWindow", ctxWindow, L"prefixPathInSCP", prefixPath);
+        return htk;
+    }
+
+    /* static */ Deserializer Deserializer::HTKMLFDeserializer(const std::wstring& labelMappingFile, size_t dimension, const std::wstring& mlfFile, const std::vector<std::wstring> mlfFileList)
+    {
+        Deserializer htk;
+        htk.AddConfig(L"labelMappingFile", labelMappingFile, L"dim", dimension);
+        if (mlfFile == L"")
+        {
+            if (mlfFileList.size() == 0)
+                LogicError("HTKMLFDeserializer: neither mlfFileList nor mlfFile were specified");
+            std::vector<DictionaryValue> actualList;
+            std::transform(mlfFileList.begin(), mlfFileList.end(), std::back_inserter(actualList), [](const std::wstring& s) {return static_cast<DictionaryValue>(s); });
+            htk.AddConfig(L"mlfFileList", actualList);
+        }
+        else
+        {
+            if (mlfFileList.size() != 0)
+                LogicError("HTKMLFDeserializer: both mlfFileList and mlfFile were specified");
+            htk.AddConfig(L"mlfFile", mlfFile);
+        }
+        return htk;
+    }
+
+    ReaderConfig::ReaderConfig(std::vector<Deserializer> deserializers, 
+        size_t epochSize, bool randomize, size_t memoryBudget, const std::unordered_map<std::wstring, DictionaryValue>& additionalOptions)
+    {
+        std::vector<DictionaryValue> actualDeserializers;
+        std::transform(deserializers.begin(), deserializers.end(), std::back_inserter(actualDeserializers), [](const Deserializer& d) { return d.toDictionaryValue(); });
+        AddConfig(L"deserializers", actualDeserializers, L"epochSize", epochSize, L"randomize", randomize, L"randomizationWindow", memoryBudget);
+        for (const auto& entry : additionalOptions)
+            AddConfig(entry.first.c_str(), entry.second);
     }
 }

@@ -96,7 +96,7 @@ def sanitize_shape(shape):
 
 
 def sanitize_input(arg, fallback_dtype=np.float32, reshape=None):
-    """
+    """sanitize_input(arg, fallback_dtype=np.float32, reshape=None)
     Convert to :class:`~cntk.ops.variables.Variable` so that it can be passed as Variable to the
     CNTK operators.
 
@@ -323,7 +323,7 @@ def sanitize_substitution_var(var):
 def sanitize_var_substitution_map(substitutions):
     '''
     Sanitizes a dictionary of Variable to Variable mapping by converting
-    any Function objects in the dictionary to Variable objects corresponding to 
+    any Function objects in the dictionary to Variable objects corresponding to
     the lone output of th Function. If there are any Function objects in the dictionary
     that have multiple outputs, it will result in an exception
     '''
@@ -333,13 +333,13 @@ def sanitize_var_substitution_map(substitutions):
 
     if not isinstance(substitutions, dict):
         raise TypeError("Variable substitution map must be a dictionary")
-    
+
     converted_substitutions = dict()
     for key, value in substitutions.items():
         key = sanitize_substitution_var(key)
         value = sanitize_substitution_var(value)
         converted_substitutions[key] = value
-    
+
     return converted_substitutions
 
 def sanitize_var_map(op_arguments, arguments, precision=None,
@@ -389,11 +389,11 @@ def sanitize_var_map(op_arguments, arguments, precision=None,
          one of 'float' 'float32, 'double', 'float64', or None
         device (:class:`~cntk.device.DeviceDescriptor`, default None): device
          this value should be put on
-        extract_values_from_minibatch_data (`bool`, defaults to `True`): specifies 
+        extract_values_from_minibatch_data (`bool`, defaults to `True`): specifies
          if :class:`~cntk.io.MinibatchData` instances in the arguments map are
          converted to the underlying value (:class:`Value`) instances (default),
-         or if they should remain intact, as they contain additional meta 
-         information required by the Trainer (specifically, by the 
+         or if they should remain intact, as they contain additional meta
+         information required by the Trainer (specifically, by the
          :meth:`~cntk.Trainer.train_minibatch` method).
 
     Returns:

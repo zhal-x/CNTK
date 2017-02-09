@@ -100,7 +100,7 @@ class Function(cntk_py.Function):
         if not hasattr(Variable, name) or name.startswith('_') or \
                 name in ['outputs', 'output', 'this']:
             # These should not be looked up in self's output.
-            # 'outputs' and 'output' are required to fetch the attribute for 
+            # 'outputs' and 'output' are required to fetch the attribute for
             # in the Variable.
             # 'this' is required for Swig and needs to be thrown if the
             # object is created the first time.

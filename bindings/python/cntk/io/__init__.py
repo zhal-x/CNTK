@@ -63,7 +63,7 @@ class MinibatchData(cntk_py.MinibatchData, ArrayMixin):
     def end_of_sweep(self):
         '''
         Indicates whether the data in this minibatch is comes from a sweep end
-        or crosses a sweep boundary (and as a result includes data from 
+        or crosses a sweep boundary (and as a result includes data from
         different sweeps).
         '''
         return self.sweep_end
@@ -79,7 +79,7 @@ class MinibatchData(cntk_py.MinibatchData, ArrayMixin):
         return self.num_sequences
 
 class MinibatchSource(cntk_py.MinibatchSource):
-    '''
+    '''MinibatchSource(deserializers=None, randomize=True, randomization_window=DEFAULT_RANDOMIZATION_WINDOW, epoch_size=INFINITELY_REPEAT, distributed_after=INFINITE_SAMPLES, multithreaded_deserializer=None)
     Parent class of all minibatch sources. For most cases you will need the
     helper functions :func:`text_format_minibatch_source` or
     :func:`minibatch_source`.
@@ -224,7 +224,11 @@ def _py_dict_to_cntk_dict(py_dict):
                     l.append(cntk_py.DictionaryValueFromDict(
                         _py_dict_to_cntk_dict(e)))
                 else:
-                    l.append(cntk_py.DictionaryValue(e))
+                    #FIXME: what's the right way to do this
+                    try:
+                        l.append(cntk_py.DictionaryValue(e))
+                    except:
+                        l.append(e.self.to_dictionary_value())
             res[k] = cntk_py.DictionaryValue(l)
         else:
             res[k] = cntk_py.DictionaryValue(v)
@@ -281,8 +285,7 @@ class ReaderConfig(dict):
         '''
         return minibatch_source(self)
 
-
-class Deserializer(dict):
+class Deserializer(cntk_py.Deserializer):
     '''
     Base deserializer class that can be used in the :class:`ReaderConfig`. A
     deserializer is responsible for deserialization of input from external
@@ -305,10 +308,9 @@ class Deserializer(dict):
     '''
 
     def __init__(self, type):
-        self['type'] = type
+        pass
 
-
-class ImageDeserializer(Deserializer):
+class ImageDeserializer(cntk_py.Deserializer):
     '''
     This class configures the image reader that reads images and corresponding
     labels from a file of the form::
@@ -325,62 +327,26 @@ class ImageDeserializer(Deserializer):
     See also:
         `Image reader definition <https://github.com/microsoft/cntk/wiki/Image-reader>`_
     '''
-
     def __init__(self, filename, streams=None):
-        super(ImageDeserializer, self).__init__('ImageDeserializer')
-        self['file'] = filename
-        self['input'] = self.input = {}
-        # In ImageDeserializer, stream field names are hard-coded as "image" and "label".
-        # These are configured in a somewhat inconsistent way.
-        import pdb
-        pdb.set_trace()
-        if streams is not None:
-            for key in streams:
-                s = streams[key]
-                node = s.stream_alias
-                if node == "image":
-                    # BUGBUG: Can dim not be specified as well?
-                    # TODO: clean this up and use a unified internal representation
-                    self.map_features(key, s.transforms)
-                elif node == "label":
-                    self.map_labels(key, s.dim)
-                else:
-                    raise ValueError("ImageDeserializer: invalid field name '{}', allowed are 'image' and 'label'".format(node))
-
-    # TODO: should be a private method; use constructor only
-    def map_features(self, node, transforms):
-        '''
-        Maps feature node (either node instance or node name) to the transforms
-        that will be applied to the images. It is usually applied to the input
-        of the network with data augmentation.
-
-        Args:
-            node (str or input node): node or its name
-            transforms (`list` of transforms): the transforms can be created by
-             the static methods `crop`, `scale`, or `mean`.
-
-        '''
-        if not isinstance(node, str):
-            node = node.name()
-        if not isinstance(transforms, list):
-            transforms = [transforms] if transforms else []
-        self.input[node] = dict(transforms=transforms)
-
-    # TODO: should be a private method; use constructor only
-    def map_labels(self, node, num_classes):
-        '''
-        Maps label node (either node instance or node name)
-        that will be applied to the images. It is usually used to define the
-        ground truth of train or test.
-
-        Args:
-            node (str or input node): node or its name
-            num_classes (int): number of classes
-
-        '''
-        if not isinstance(node, str):
-            node = node.name()
-        self.input[node] = dict(labelDim=num_classes) # reader distinguishes labels from features by calling this 'labelDim'
+        image_stream_name, label_stream_name = None, None
+        num_labels = 0
+        transforms = []
+        for key in streams:
+            s = streams[key]
+            alias = s.stream_alias
+            if alias == "image":
+                image_stream_name = key
+                transforms = s.transforms
+            elif alias == "label":
+                label_stream_name = key
+                num_labels = s.dim
+            else:
+                raise ValueError("ImageDeserializer: invalid field name '{}', allowed are 'image' and 'label'".format(alias))
+        if image_stream_name is None:
+            raise ValueError("ImageDeserializer: image stream name not specified")
+        if label_stream_name is None:
+            raise ValueError("ImageDeserializer: label stream name not specified")
+        self.self = cntk_py.Deserializer_image_deserializer(filename, label_stream_name, num_labels, image_stream_name, transforms)
 
     @staticmethod
     def crop(crop_type='center', crop_size=0, side_ratio=0.0, area_ratio=0.0, aspect_ratio=1.0, jitter_type='none'):
@@ -388,41 +354,41 @@ class ImageDeserializer(Deserializer):
         Crop transform that can be used to pass to `map_features`
 
         Args:
-            crop_type (str, default 'center'): 'center', 'randomside', 'randomarea', 
+            crop_type (str, default 'center'): 'center', 'randomside', 'randomarea',
              or 'multiview10'.  'randomside' and 'randomarea' are usually used during
-             training, while 'center' and 'multiview10' are usually used during testing. 
+             training, while 'center' and 'multiview10' are usually used during testing.
              Random cropping is a popular data augmentation technique used to improve
              generalization of the DNN.
-            crop_size (`int`, default 0): crop size in pixels. Ignored if set to 0. 
+            crop_size (`int`, default 0): crop size in pixels. Ignored if set to 0.
              When crop_size is non-zero, for example, crop_size=256, it means a cropping
              window of size 256x256 pixels will be taken. If one want to crop with
-             non-square shapes, specify crop_size=256:224 will crop 256x224 (width x height) 
+             non-square shapes, specify crop_size=256:224 will crop 256x224 (width x height)
              pixels. `When crop_size is specified, side_ratio, area_ratio and aspect_ratio
-             will be ignored.` 
-            side_ratio (`float`, default 0.0): It specifies the ratio of final image 
-             side (width or height) with respect to the original image. Ignored if set 
-             to 0.0. Otherwise, must be set within `(0,1]`. For example, with an input 
-             image size of 640x480, side_ratio of 0.5 means we crop a square region 
-             (if aspect_ratio is 1.0) of the input image, whose width and height are 
-             equal to 0.5*min(640, 480) = 240. To enable scale jitter (a popular data 
-             augmentation technique), use colon-delimited values like side_ratio=0.5:0.75, 
-             which means the crop will have size between 240 (0.5*min(640, 480)) and 360 
-             (0.75*min(640, 480)). 
-            area_ratio (`float`, default 0.0): It specifies the area ratio of final image 
-             with respect to the original image. Ignored if set to 0.0. Otherwise, must be 
-             set within `(0,1]`. For example, for an input image size of 200x150 pixels, 
-             the area is 30,000. If area_ratio is 0.3333, we crop a square region (if 
-             aspect_ratio is 1.0) with width and height equal to sqrt(30,000*0.3333)=100. 
-             To enable scale jitter, use colon-delimited values such as area_ratio=0.3333:0.8, 
-             which means the crop will have size between 100 (sqrt(30,000*0.3333)) and 
-             155 (sqrt(30,000*0.8)). 
+             will be ignored.`
+            side_ratio (`float`, default 0.0): It specifies the ratio of final image
+             side (width or height) with respect to the original image. Ignored if set
+             to 0.0. Otherwise, must be set within `(0,1]`. For example, with an input
+             image size of 640x480, side_ratio of 0.5 means we crop a square region
+             (if aspect_ratio is 1.0) of the input image, whose width and height are
+             equal to 0.5*min(640, 480) = 240. To enable scale jitter (a popular data
+             augmentation technique), use colon-delimited values like side_ratio=0.5:0.75,
+             which means the crop will have size between 240 (0.5*min(640, 480)) and 360
+             (0.75*min(640, 480)).
+            area_ratio (`float`, default 0.0): It specifies the area ratio of final image
+             with respect to the original image. Ignored if set to 0.0. Otherwise, must be
+             set within `(0,1]`. For example, for an input image size of 200x150 pixels,
+             the area is 30,000. If area_ratio is 0.3333, we crop a square region (if
+             aspect_ratio is 1.0) with width and height equal to sqrt(30,000*0.3333)=100.
+             To enable scale jitter, use colon-delimited values such as area_ratio=0.3333:0.8,
+             which means the crop will have size between 100 (sqrt(30,000*0.3333)) and
+             155 (sqrt(30,000*0.8)).
             aspect_ratio (`float`, default 1.0): It specifies the aspect ratio (width/height
-             or height/width) of the crop window. Must be set within `(0,1]`. For example, 
-             if due to size_ratio the crop size is 240x240, an aspect_ratio of 0.64 will 
-             change the window size to non-square: 192x300 or 300x192, each having 50% 
-             chance. Note the area of the crop window does not change. To enable aspect 
-             ratio jitter, use colon-delimited values such as aspect_ratio=0.64:1.0, which means 
-             the crop will have size between 192x300 (or euqally likely 300x192) and 240x240. 
+             or height/width) of the crop window. Must be set within `(0,1]`. For example,
+             if due to size_ratio the crop size is 240x240, an aspect_ratio of 0.64 will
+             change the window size to non-square: 192x300 or 300x192, each having 50%
+             chance. Note the area of the crop window does not change. To enable aspect
+             ratio jitter, use colon-delimited values such as aspect_ratio=0.64:1.0, which means
+             the crop will have size between 192x300 (or euqally likely 300x192) and 240x240.
             jitter_type (str, default 'none'): crop scale jitter type, possible
              values are 'none' and 'uniratio'. 'uniratio' means uniform distributed jitter
              scale between the minimum and maximum ratio values.
@@ -430,8 +396,8 @@ class ImageDeserializer(Deserializer):
         Returns:
             dict describing the crop transform
         '''
-        return dict(type='Crop', cropType=crop_type, cropSize=crop_size, sideRatio=side_ratio, 
-                    areaRatio=area_ratio, aspectRatio=aspect_ratio, jitterType=jitter_type)
+        return cntk_py.ImageTransform_crop(crop_type, crop_size, side_ratio,
+            area_ratio, aspect_ratio, jitter_type)
 
     @staticmethod
     def scale(width, height, channels, interpolations='linear', scale_mode="fill", pad_value=-1):
@@ -454,8 +420,8 @@ class ImageDeserializer(Deserializer):
         Returns:
             dict describing the scale transform
         '''
-        return dict(type='Scale', width=width, height=height, channels=channels,
-                interpolations=interpolations, scaleMode=scale_mode, padValue=pad_value)
+        return cntk_py.ImageTransform_scale(width, height, channels,
+                interpolations, scale_mode, pad_value)
 
     @staticmethod
     def mean(filename):
@@ -469,47 +435,46 @@ class ImageDeserializer(Deserializer):
         Returns:
             dict describing the mean transform
         '''
-        return dict(type='Mean', meanFile=filename)
+        return cntk_py.ImageTransform_mean(filename)
 
     @staticmethod
-    def color(brightness_radius=0.0, contrast_radius=0.0, saturation_radius=0.0): 
+    def color(brightness_radius=0.0, contrast_radius=0.0, saturation_radius=0.0):
         '''
         Color transform that can be used to pass to `map_features` for data augmentation.
 
-        Args: 
-            brightness_radius (float, default 0.0): Radius for brightness change. Must be 
-             set within [0.0, 1.0]. For example, assume brightness_radius = 0.2, a random 
-             number `x` is uniformly drawn from [-0.2, 0.2], and every pixel's value is 
-             added by `x*meanVal`, where meanVal is the mean of the image pixel intensity 
-             combining all color channels. 
-            contrast_radius (float, default 0.0): Radius for contrast change. Must be 
-             set within [0.0, 1.0]. For example, assume contrast_radius = 0.2, a random 
-             number `x` is uniformly drawn from [-0.2, 0.2], and every pixel's value is 
-             multiplied by `1+x`. 
+        Args:
+            brightness_radius (float, default 0.0): Radius for brightness change. Must be
+             set within [0.0, 1.0]. For example, assume brightness_radius = 0.2, a random
+             number `x` is uniformly drawn from [-0.2, 0.2], and every pixel's value is
+             added by `x*meanVal`, where meanVal is the mean of the image pixel intensity
+             combining all color channels.
+            contrast_radius (float, default 0.0): Radius for contrast change. Must be
+             set within [0.0, 1.0]. For example, assume contrast_radius = 0.2, a random
+             number `x` is uniformly drawn from [-0.2, 0.2], and every pixel's value is
+             multiplied by `1+x`.
             saturation_radius (float, default 0.0): Radius for saturation change. Only for
-             color images and must be set within [0.0, 1.0]. For example, assume 
-             saturation_radius = 0.2, a random number `x` is uniformly drawn from [-0.2, 0.2], 
+             color images and must be set within [0.0, 1.0]. For example, assume
+             saturation_radius = 0.2, a random number `x` is uniformly drawn from [-0.2, 0.2],
              and every pixel's saturation is multiplied by `1+x`.
 
         Returns:
             dict describing the mean transform
         '''
-        return dict(type='Color', brightnessRadius=brightness_radius, 
-                    contrastRadius=contrast_radius, saturationRadius=saturation_radius)
+        return cntk_py.ImageTransform_color(brightness_radius, contrast_radius, saturation_radius)
 
     #@staticmethod
-    #def intensity(intensity_stddev, intensity_file): 
+    #def intensity(intensity_stddev, intensity_file):
     #    '''
-    #    Intensity transform that can be used to pass to `map_features` for data augmentation. 
+    #    Intensity transform that can be used to pass to `map_features` for data augmentation.
     #    Intensity jittering based on PCA transform as described in original `AlexNet paper
     #    <http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf>`_
 
-    #    Currently uses precomputed values from 
+    #    Currently uses precomputed values from
     #    https://github.com/facebook/fb.resnet.torch/blob/master/datasets/imagenet.lua
 
-    #    Args: 
-    #        intensity_stddev (float): intensity standard deviation. 
-    #        intensity_file (str): intensity file. 
+    #    Args:
+    #        intensity_stddev (float): intensity standard deviation.
+    #        intensity_file (str): intensity file.
     #    Returns:
     #        dict describing the mean transform        '''
     #    return dict(type='Intensity', intensityStdDev=intensity_stddev, intensityFile=intensity_file)
@@ -531,43 +496,9 @@ class CTFDeserializer(Deserializer):
     See also:
         `CNTKTextReader format <https://github.com/microsoft/cntk/wiki/CNTKTextFormat-Reader>`_
     '''
-
-    def __init__(self, filename, streams=None):
-        super(CTFDeserializer, self).__init__('CNTKTextFormatDeserializer')
-        self['file'] = filename
-        self['input'] = self.input = {}
-        # connect all streams (: StreamDef) if given
-        if streams is not None:
-            for key in streams:
-                s = streams[key]
-                # TODO: guard against any other fields, such as transformers, which is not valid here
-                self.map_input(key, s.dim, "sparse" if s.is_sparse else "dense", alias=s.stream_alias)
-
-    # TODO: should be a private method; use constructor only
-    def map_input(self, node, dim, format="dense", alias=None):
-        '''
-        Maps node (either node instance or node name) to a part of the text input,
-        either specified by the node name or the alias in the text file.
-
-        Example: for node name 'input0' an input line could look like this::
-
-          |input0 3 7 1 0 2
-
-        Args:
-            node (str or input node): node or its name
-            dim (int): specifies the dimension of the input value vector
-             (for dense input this directly corresponds to the number of values in each sample,
-             for sparse this represents the upper bound on the range of possible index values).
-            format (str, default 'dense'): 'dense' or 'sparse'. Specifies the input type.
-            alias (str, default None): None or alias name. Optional abbreviated name that
-             is used in the text file to avoid repeating long input names. For details please
-             see `CNTKTextReader format <https://github.com/microsoft/cntk/wiki/CNTKTextFormat-Reader>`_
-        '''
-        if not isinstance(node, str):
-            node = node.name()
-        if alias is None:
-            alias=node
-        self.input[node] = dict(dim=dim, format=format, alias=alias)
+    def __init__(self, filename, streams):
+        sc = [cntk_py.StreamConfiguration(k, s.dim, s.is_sparse, s.stream_alias) for k,s in streams.items()] 
+        self.self = cntk_py.Deserializer_ctfdeserializer(filename, sc)
 
 
 # TODO: this should be a private class; use StreamDef instead
@@ -589,7 +520,6 @@ class StreamConfiguration(cntk_py.StreamConfiguration):
 
     def __init__(self, name, dim, is_sparse=False, stream_alias=''):
         return super(StreamConfiguration, self).__init__(name, dim, is_sparse, stream_alias)
-
 
 # wrapper around text_format_minibatch_source() that attaches a record of streams
 # TODO: This should not exist; use MinibatchSource(CTFDeserializer(...))

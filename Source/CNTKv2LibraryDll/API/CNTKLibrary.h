@@ -1380,18 +1380,6 @@ namespace CNTK
 
         CNTK_API void Add(const Dictionary& other);
 
-        void Insert(const wchar_t* key, const DictionaryValue& value)
-        {
-            operator[](key) = value;
-        }
-
-        template<typename... Args>
-        void Insert(const wchar_t* key, const DictionaryValue& value, Args... args)
-        {
-            Insert(key, value); //insert one entry
-            Insert(args...);    //recurse
-        }
-
         CNTK_API bool operator==(const Dictionary& other) const;
         CNTK_API bool operator!=(const Dictionary& other) const;
 
@@ -4079,18 +4067,32 @@ namespace CNTK
         return CreateCompositeMinibatchSource(minibatchSourceConfiguration);
     }
 
+    class Record
+    {
+    protected:
+        Dictionary m_config;
+
+        void AddConfig(const wchar_t* key, const DictionaryValue& value)
+        {
+            m_config[key] = value;
+        }
+
+        template<typename... Args>
+        void AddConfig(const wchar_t* key, const DictionaryValue& value, Args... args)
+        {
+            AddConfig(key, value); //insert one
+            AddConfig(args...);    //recurse
+        }
+    public:
+        DictionaryValue toDictionaryValue() const { return DictionaryValue(m_config); }
+    };
+
     /// 
     /// Encapsulates all the different transforms that can be applied to an image
     /// 
-    class ImageTransform
+    class ImageTransform : public Record
     {
-        Dictionary m_atrributes;
-
-        friend class ImageDeserializer;
-        //void AddConfig(const wchar_t* key, const DictionaryValue& value);
-
         ImageTransform() {};
-
     public:
         /// 
         /// Create a crop transform with the specified options
@@ -4116,38 +4118,51 @@ namespace CNTK
         /// 
         CNTK_API static ImageTransform Color(float brightnessRadius = 0.0f,
             float contrastRadius = 0.0f, float saturationRadius = 0.0f);
-
-        template<typename... Args>
-        void AddConfig(Args... args)
-        {
-            m_atrributes.Insert(args...);
-        }
-
-        operator DictionaryValue()  { return DictionaryValue(m_atrributes); }
-        DictionaryValue convert()  { return DictionaryValue(m_atrributes); }
     };
 
-    class ImageDeserializer
+    /// 
+    /// Encapsulates the different deserializers that can be applied to an image
+    /// 
+    class Deserializer : public Record
     {
-        Dictionary m_config;
+        Deserializer() {};
 
     public:
-        ImageDeserializer(const wchar_t* mapFile, const wchar_t* labelStreamName, size_t numLabels, const wchar_t* imageStreamName, const std::vector<ImageTransform>& transforms = {})
-        {
-            std::vector<DictionaryValue> actualTransforms(transforms.size());
-            //Why doesn't this work?
-            //std::transform(transforms.begin(), transforms.end(), actualTransforms.begin(), [](ImageTransform t) {return static_cast<DictionaryValue>(t); });
-            std::transform(transforms.begin(), transforms.end(), actualTransforms.begin(), [](ImageTransform t) {return t.convert(); });
-            Dictionary input;
-            Dictionary xforms;
-            Dictionary labeldim;
-            labeldim.Insert(L"labelDim", numLabels);
-            xforms.Insert(L"transforms", actualTransforms);
-            input.Insert(imageStreamName, xforms, labelStreamName, labeldim);
-            m_config.Insert(L"type", L"ImageDeserializer", L"file", mapFile, L"input", input);
-        }
-    };
+        /// 
+        /// Create an ImageDeserializer with the specified options
+        /// 
+        CNTK_API static Deserializer ImageDeserializer(const std::wstring& fileName, const std::wstring& labelStreamName, size_t numLabels, const std::wstring& imageStreamName, const std::vector<ImageTransform>& transforms = {});
 
+        /// 
+        /// Create an CTFDeserializer with the specified options
+        /// 
+        CNTK_API static Deserializer CTFDeserializer(const std::wstring& fileName, const std::vector<StreamConfiguration>& streams);
+
+
+        /// 
+        /// Create an HTKFeatureDeserializer with the specified options
+        /// 
+        CNTK_API static Deserializer HTKFeatureDeserializer(const std::wstring& fileName, size_t dimension, size_t leftContextSize = 1, size_t rightContextSize = 1, const std::wstring& prefixPath = L"");
+
+        /// 
+        /// Create an HTKMLFDeserializer with the specified options
+        /// 
+        CNTK_API static Deserializer HTKMLFDeserializer(const std::wstring& labelMappingFile, size_t dimension, const std::wstring& mlfFile = L"", const std::vector<std::wstring> mlfFileList = {});
+    };
+    
+    // There's already a readerConfiguration; are we duplicating things?
+    class ReaderConfig : public Record {
+        ReaderConfig() {}
+    public:
+        /// 
+        /// Create a ReaderConfig with the specified options
+        /// 
+        CNTK_API ReaderConfig(std::vector<Deserializer> deserializers,
+            size_t epochSize = MinibatchSource::InfinitelyRepeat, 
+            bool randomize = true, 
+            size_t memoryBudget = MinibatchSource::DefaultRandomizationWindow, 
+            const std::unordered_map<std::wstring, DictionaryValue>& additionalOptions = {});
+    };
 
 
     ///

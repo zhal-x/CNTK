@@ -67,6 +67,7 @@
 %template() std::vector<std::pair<size_t, double>>;
 %template() std::vector<std::pair<size_t, size_t>>;
 %template() std::vector<std::pair<CNTK::Variable, CNTK::Variable>>;
+%template() std::vector<CNTK::ImageTransform>;
 
 // They are defined twice under CNTK::Internal and under CNTK namespace
 %ignore CNTK::Internal::Combine;
@@ -392,6 +393,11 @@ fail:
         Py_DECREF(val);
     }
     $result = container;
+}
+
+%typemap(freearg) std::vector<CNTK::Variable> const& {
+    //freearg std::vector<CNTK::ImageTransform>
+    delete $1;
 }
 
 
