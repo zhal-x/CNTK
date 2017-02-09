@@ -28,8 +28,10 @@ class Trainer(cntk_py.Trainer):
        criteria (Python tuple of :class:`~cntk.ops.functions.Function`, or :class:`~cntk.ops.functions.Function` or ):
         loss and metric function, given as a either Python tuple or tuple-valued CNTK Function
        parameter_learners (list): list of learners from :mod:`cntk.learner`
+       progress_writers (list): optionally, list of progress writers from :mod:`cntk.utils` to automatically track
+         training progress.
     '''
-    def __init__(self, model, criteria, parameter_learners):
+    def __init__(self, model, criteria, parameter_learners, progress_writers=None):
         if isinstance(criteria, cntk_py.Function):
             criteria = criteria.outputs # turn CNTK Function into a tuple
         loss_function, eval_function = criteria # destructure the tuple
@@ -40,10 +42,13 @@ class Trainer(cntk_py.Trainer):
             eval_function = sanitize_function(eval_function)
         if not isinstance(parameter_learners, list):
             parameter_learners = [parameter_learners]
+        if progress_writers and not isinstance(progress_writers, list):
+            progress_writers = [progress_writers]
 
         trainer = cntk_py.trainer_impl(model, loss_function, eval_function, parameter_learners)
         # transplant into this class instance
         self.__dict__ = trainer.__dict__
+        self._progress_writers = progress_writers if progress_writers else []
 
     def train_minibatch(self, arguments, outputs=None, device=None):
         '''
@@ -97,24 +102,29 @@ class Trainer(cntk_py.Trainer):
                 updated = super(Trainer, self).train_minibatch_overload_for_minibatchdata(
                     arguments, output_map, device)
             else:    
-                updated = super(Trainer, self).train_minibatch(arguments,
-                    output_map, device)
+                updated = super(Trainer, self).train_minibatch(
+                    arguments, output_map, device)
 
             for k,v in output_map.items():
                 output_map[k] = variable_value_to_seq(v, k)
 
-            return updated, output_map
+            result = updated, output_map
         else:
 
             if contains_minibatch_data:
-                updated = super(Trainer, self).train_minibatch_overload_for_minibatchdata(
+                result = super(Trainer, self).train_minibatch_overload_for_minibatchdata(
                     arguments, device)
             else:    
-                updated = super(Trainer, self).train_minibatch(arguments,
-                    device)
+                result = super(Trainer, self).train_minibatch(
+                    arguments, device)
 
-        return updated
+        for progress_writer in self._progress_writers:
+            progress_writer.update_training_progress(
+                self.previous_minibatch_sample_count,
+                self.previous_minibatch_loss_average,
+                self.previous_minibatch_evaluation_average)
 
+        return result
 
     def test_minibatch(self, arguments, device=None):
         '''
@@ -231,3 +241,10 @@ class Trainer(cntk_py.Trainer):
         The number of samples seen globally between all workers from the beginning of training.
         '''
         return super(Trainer, self).total_number_of_samples_seen()
+
+    @property
+    def progress_writers(self):
+        '''
+        Progress writers used to track the progress of the Trainer.
+        '''
+        return self._progress_writers
