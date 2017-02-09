@@ -137,7 +137,6 @@ namespace CNTK
             (op == PrimitiveOpType::CrossEntropyWithSoftmax) ||
             (op == PrimitiveOpType::ClassificationError) ||
             (op == PrimitiveOpType::Logistic) ||
-            (op == PrimitiveOpType::CosDistance) || 
             (op == PrimitiveOpType::LambdaRank) ||
             (op == PrimitiveOpType::NDCG))
         {
@@ -824,7 +823,7 @@ namespace CNTK
             inputs.push_back(runCount);
         }
         
-        return std::shared_ptr<PrimitiveFunction>(new PrimitiveFunction(op, inputs, std::move(attributes), name, uid), 
-                                                  [](PrimitiveFunction* ptr) { delete ptr; });
+            return std::shared_ptr<PrimitiveFunction>(new PrimitiveFunction(op, inputs, std::move(attributes), name, uid), 
+                                                      [](PrimitiveFunction* ptr) { delete ptr; });
     }
 }
