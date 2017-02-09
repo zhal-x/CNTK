@@ -25,7 +25,8 @@ namespace CNTK
           m_evaluationFunction(evaluationFunction),
           m_parameterLearners(std::make_shared<Learners>(parameterLearners)),
           m_prevMinibatchNumSamples(1),
-          m_distributed(false)
+          m_distributed(false),
+          m_accumulatedNumSamples(0)
     {
         // By default we set the number of threads to hardware concurrency.
         if (!Internal::MaxNumCPUThreadsSet())
@@ -256,6 +257,76 @@ namespace CNTK
         return updated;
     }
 
+    double Trainer::AccumulatedLossAverage() const
+    {
+        return m_accumulatedNumSamples == 0 ? 0 : (GetScalarValue(m_accumulatedTrainingLossValue) / m_accumulatedNumSamples);
+    }
+
+    double Trainer::AccumulatedEvaluationAverage() const
+    {
+        if (!m_evaluationFunction)
+            InvalidArgument("Trainer::AccumulatedEvaluationAverage: Cannot get evaluation criterion value when no evaluation function was specified during 'this' trainer's construction");
+
+        return m_accumulatedNumSamples == 0 ? 0 : (GetScalarValue(m_accumulatedEvalCriterionValue) / m_accumulatedNumSamples);
+    }
+
+    static void ResetToZero(ValuePtr& v)
+    {
+        if (v == nullptr) return;
+
+        if (v->GetDataType() == DataType::Float)
+            v->Data()->SetValue(0.0f);
+        else
+            v->Data()->SetValue(0.0);
+    }
+
+    void Trainer::ResetAccumulation()
+    {
+        ResetToZero(m_accumulatedTrainingLossValue);
+        ResetToZero(m_accumulatedEvalCriterionValue);
+        m_accumulatedNumSamples = 0;
+    }
+
+    void Trainer::AccumulatePrevMinibatch(const DeviceDescriptor& computeDevice)
+    {
+        auto CreateIfDifferent_Add = [computeDevice](ValuePtr& accumulated, const ValuePtr& value) -> bool
+        {
+            bool created = false;
+
+            if (!accumulated ||
+                accumulated->GetDataType() != value->GetDataType() ||
+                accumulated->Shape() != value->Shape() ||
+                accumulated->Device() != computeDevice ||
+                accumulated->Mask() != value->Mask())
+            {
+                created = true;
+                accumulated = MakeSharedObject<Value>(
+                    MakeSharedObject<NDArrayView>(
+                        value->GetDataType(),
+                        value->Shape(),
+                        computeDevice),
+                    value->Mask());
+
+                ResetToZero(accumulated);
+            }
+
+            if (accumulated->GetDataType() == DataType::Float)
+                accumulated->Data()->GetWritableTensorView<float>()->AddCopyOf(*value->Data()->GetWritableTensorView<float>());
+            else
+                accumulated->Data()->GetWritableTensorView<double>()->AddCopyOf(*value->Data()->GetWritableTensorView<double>());
+
+            return created;
+        };
+
+        bool createdLoss = CreateIfDifferent_Add(m_accumulatedTrainingLossValue, m_prevMinibatchAggregateTrainingLossValue);
+        bool createdEval = CreateIfDifferent_Add(m_accumulatedEvalCriterionValue, m_prevMinibatchAggregateEvalCriterionValue);
+
+        if ((createdLoss || createdEval) && m_accumulatedNumSamples != 0)
+            RuntimeError("Accumulation values are created when accumulated num samples not zero");
+
+        m_accumulatedNumSamples += m_prevMinibatchNumSamples;
+    }
+
     void Trainer::ExecuteForwardBackward(const std::unordered_map<Variable, ValuePtr>& arguments, std::unordered_map<Variable, ValuePtr>& outputsToFetch, const DeviceDescriptor& computeDevice, std::unordered_map<Variable, ValuePtr>& parameterGradients)
     {
         std::unordered_map<Variable, ValuePtr> outputs = { { m_aggregatedLossFunction, nullptr }, { m_trainingSampleCountVar, nullptr } };
@@ -268,6 +339,8 @@ namespace CNTK
         m_prevMinibatchAggregateTrainingLossValue = outputs[m_aggregatedLossFunction];
         if (m_aggregatedEvaluationFunction)
             m_prevMinibatchAggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
+
+        AccumulatePrevMinibatch(computeDevice);
 
         for (auto outputToFetch : outputsToFetch)
         {
