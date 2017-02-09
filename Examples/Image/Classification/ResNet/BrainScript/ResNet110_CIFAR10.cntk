@@ -2,7 +2,7 @@
 
 command = TrainConvNet:Eval
 
-precision = "float"; traceLevel = 1 ; deviceId = "auto"
+precision = "float"; traceLevel = 1 ; deviceId = "auto" ; parallelTrain = "true"
 
 rootDir = "../../.." ; configDir = "./" ; dataDir = "$rootDir$/DataSets/CIFAR-10" ;
 outputDir = "./Output" ;
@@ -70,10 +70,19 @@ TrainConvNet = {
         # momentum update rule in CNTK: v{t + 1} = lr*(1 - momentum)*g{t + 1} + momentum*v{t} 
         learningRatesPerMB = 0.1*1:1.0*80:0.1*40:0.01
         momentumPerMB = 0.9
-        maxEpochs = 160
+        maxEpochs = 5
         L2RegWeight = 0.0001
 
         numMBsToShowResult = 100
+
+        ParallelTrain = {
+            parallelizationMethod = "DataParallelSGD"
+            distributedMBReading = "true"
+            parallelizationStartEpoch = 1
+            DataParallelSGD = {
+                gradientBits = 32
+            }
+        }
     }
 
     reader = {
