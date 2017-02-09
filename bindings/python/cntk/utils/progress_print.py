@@ -283,8 +283,7 @@ class ProgressPrinter(object):
             return
 
         #remember the trainer for epoch_summary
-        if self.trainer == None:
-            self.trainer = trainer
+        self.trainer = trainer
 
         self.updates_since_start += 1
         self.total_updates       += 1
