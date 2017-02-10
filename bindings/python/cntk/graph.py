@@ -6,7 +6,6 @@
 
 import os
 
-
 def depth_first_search(node, visitor):
     '''
     Generic function that walks through the graph starting at ``node`` and
@@ -25,24 +24,29 @@ def depth_first_search(node, visitor):
     visited = set()
 
     while stack:
-        node = stack.pop()
+        node = stack.pop(0)
         if node in visited:
             continue
 
         try:
             # Function node
-            stack.extend(node.root_function.inputs)
+            stack = list(node.root_function.inputs) + stack
         except AttributeError:
             # OutputVariable node
             try:
                 if node.is_output:
-                    stack.append(node.owner)
+                    stack.insert(0, node.owner)
                     visited.add(node)
                     continue
             except AttributeError:
                 pass
 
         if visitor(node):
+            if node.is_parameter:
+                node = node.as_parameter()
+            elif node.is_constant:
+                node = node.as_constant()
+
             accum.append(node)
 
         visited.add(node)
@@ -169,7 +173,7 @@ def plot(node, to_file=None):
         return "#dyn: %i\nstatic: %s"%(num_dyn_axes, static_shape)
 
     while stack:
-        node = stack.pop()
+        node = stack.pop(0)
 
         if node in visited:
             continue
@@ -177,7 +181,7 @@ def plot(node, to_file=None):
         try:
             # Function node
             node = node.root_function
-            stack.extend(node.inputs)
+            stack = list(node.root_function.inputs) + stack
 
             # add current node
             line = [node.op_name]
@@ -233,7 +237,7 @@ def plot(node, to_file=None):
             # OutputVariable node
             try:
                 if node.is_output:
-                    stack.append(node.owner)
+                    stack.insert(0, node.owner)
             except AttributeError:
                 pass
 
@@ -249,6 +253,7 @@ def plot(node, to_file=None):
 
     return model
 
+
 def output_function_graph(node, dot_file_path=None, png_file_path=None):
     import warnings
     warnings.warn('This will be removed in future versions. Please use '
@@ -262,3 +267,25 @@ def output_function_graph(node, dot_file_path=None, png_file_path=None):
 
     return result
 
+
+def get_node_outputs(node):
+    '''
+    Walks through every node of the graph starting at ``node``
+    and returns a list of all node outputs.
+
+    Args:
+        node (graph node): the node to start the journey from
+
+    Returns:
+        A list of all node outputs
+    '''
+    node_list = depth_first_search(node, lambda x: True)
+    node_outputs = []
+    for node in node_list:
+        try:
+            for out in node.outputs:
+                node_outputs.append(out)
+        except AttributeError:
+            pass
+
+    return node_outputs
