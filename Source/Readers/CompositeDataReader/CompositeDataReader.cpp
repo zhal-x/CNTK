@@ -177,20 +177,24 @@ CompositeDataReader::CompositeDataReader(const ConfigParameters& config) :
             m_sequenceEnumerator,
             m_streams,
             numAlternatingBuffers,
-            localTimeline);
+            localTimeline,
+            m_corpus);
         break;
     case PackingMode::sequence:
         m_packer = std::make_shared<SequencePacker>(
             m_sequenceEnumerator,
             m_streams,
             numAlternatingBuffers,
-            localTimeline);
+            localTimeline,
+            m_corpus);
         break;
     case PackingMode::truncated:
     {
         m_packer = std::make_shared<TruncatedBPTTPacker>(
             m_sequenceEnumerator,
-            m_streams);
+            m_streams,
+            numAlternatingBuffers,
+            m_corpus);
         break;
     }
     default:
@@ -345,16 +349,6 @@ bool CompositeDataReader::ContainsDeserializer(const ConfigParameters& readerCon
             return true;
     }
     return false;
-}
-
-Minibatch CompositeDataReader::ReadMinibatch()
-{
-    auto m = ReaderBase::ReadMinibatch();
-    m.m_idToKeyMapping = [this](size_t sequence)
-    {
-        return m_corpus->IdToKey(sequence);
-    };
-    return m;
 }
 
 }}}

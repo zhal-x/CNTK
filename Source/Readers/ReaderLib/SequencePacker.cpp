@@ -48,7 +48,6 @@ Minibatch SequencePacker::ReadMinibatch()
     auto& currentBuffer = m_streamBuffers[m_currentBufferIndex];
 
     assert(m_outputStreamDescriptions.size() == batch.size());
-
     for (int streamIndex = 0; streamIndex < batch.size(); ++streamIndex)
     {
         const auto& streamBatch = batch[streamIndex];
@@ -69,6 +68,8 @@ Minibatch SequencePacker::ReadMinibatch()
         streamMinibatch->m_layout = pMBLayout;
         minibatch.m_data.push_back(streamMinibatch);
     }
+
+    EstablishIdToKey(minibatch, sequences);
 
     m_currentBufferIndex = (m_currentBufferIndex + 1) % m_numberOfBuffers;
     return minibatch;

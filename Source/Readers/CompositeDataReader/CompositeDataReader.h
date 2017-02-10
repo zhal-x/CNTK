@@ -63,8 +63,6 @@ public:
     // Starts a new epoch with the provided configuration
     void StartEpoch(const EpochConfiguration& config, const std::map<std::wstring, int>& inputDescriptions) override;
 
-    Minibatch ReadMinibatch() override;
-
 private:
     void CreateDeserializers(const ConfigParameters& readerConfig);
     void CreateTransforms(const ConfigParameters& deserializerConfig);

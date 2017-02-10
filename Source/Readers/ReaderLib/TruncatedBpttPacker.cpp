@@ -116,8 +116,9 @@ struct SequenceBuffer
 TruncatedBPTTPacker::TruncatedBPTTPacker(
     SequenceEnumeratorPtr sequenceEnumerator,
     const vector<StreamDescriptionPtr>& streams,
-    size_t numberOfBuffers)
-    : PackerBase(sequenceEnumerator, streams, numberOfBuffers)
+    size_t numberOfBuffers,
+    CorpusDescriptorPtr corpus)
+    : PackerBase(corpus, sequenceEnumerator, streams, numberOfBuffers)
 {
     auto sparseOutput = find_if(m_outputStreamDescriptions.begin(), m_outputStreamDescriptions.end(), [](const StreamDescriptionPtr& s){ return s->m_storageType == StorageType::sparse_csc; });
     if (sparseOutput != m_outputStreamDescriptions.end())

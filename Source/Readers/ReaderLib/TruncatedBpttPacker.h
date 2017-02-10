@@ -23,7 +23,8 @@ public:
     TruncatedBPTTPacker(
         SequenceEnumeratorPtr sequenceEnumerator,
         const std::vector<StreamDescriptionPtr>& streams,
-        size_t numberOfBuffers = 2);
+        size_t numberOfBuffers = 2,
+        CorpusDescriptorPtr corpus = nullptr);
 
     virtual Minibatch ReadMinibatch() override;
 
