@@ -126,9 +126,9 @@ BOOST_AUTO_TEST_CASE(Base64WithWriteIds)
             "Composite_Test", "reader", additionalParameters);
 
         reader->StartMinibatchLoop(2 /*mbSize*/, 0, inputs->GetStreamDescriptions(), 4/*epochSize*/);
-        for (auto index = 0; reader->GetMinibatch(*inputs) && index < m_maxMiniBatchCount; index++)
+        for (auto index = 0; reader->GetMinibatch(*inputs); index++)
         {
-            for (const auto s : inputs->GetInput(L"input").pMBLayout->GetAllSequences())
+            for (const auto s : inputs->GetInput(L"features").pMBLayout->GetAllSequences())
             {
                 auto key = inputs->m_idToKeyMapping(s.seqId);
                 actualKeys.insert(key);
@@ -139,10 +139,10 @@ BOOST_AUTO_TEST_CASE(Base64WithWriteIds)
     {
         multiset<string> expectedKeys
         {
-            "image0", "image0",
-            "image1", "image1",
-            "image2", "image2",
-            "image3", "image3"
+            "image0",
+            "image1",
+            "image2",
+            "image3",
         };
 
         std::vector<std::wstring> additionalParameters
@@ -160,10 +160,10 @@ BOOST_AUTO_TEST_CASE(Base64WithWriteIds)
     {
         multiset<string> expectedKeys
         {
-            "0", "0",
-            "1", "1",
-            "2", "2",
-            "3", "3"
+            "0",
+            "1",
+            "2",
+            "3",
         };
 
         std::vector<std::wstring> additionalParameters

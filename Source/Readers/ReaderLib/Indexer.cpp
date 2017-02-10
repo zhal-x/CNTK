@@ -138,50 +138,37 @@ void Indexer::Build(CorpusDescriptorPtr corpus)
     SequenceDescriptor sd = {};
     sd.m_fileOffsetBytes = offset;
 
-    size_t currentKey = id;
+    size_t previousId = id;
     while (!m_done)
     {
         SkipLine(); // ignore whatever is left on this line.
         offset = GetFileOffset(); // a new line starts at this offset;
         sd.m_numberOfSamples++;
 
-        if (!m_done && TryGetSequenceId(id, corpus->KeyToId) && id != currentKey)
+        if (!m_done && TryGetSequenceId(id, corpus->KeyToId) && id != previousId)
         {
             // found a new sequence, which starts at the [offset] bytes into the file
             sd.m_byteSize = offset - sd.m_fileOffsetBytes;
-            AddSequenceIfIncluded(corpus, currentKey, sd);
+            AddSequenceIfIncluded(corpus, previousId, sd);
 
             sd = {};
             sd.m_fileOffsetBytes = offset;
-            currentKey = id;
+            previousId = id;
         }
     }
 
     // calculate the byte size for the last sequence
     sd.m_byteSize = m_fileOffsetEnd - sd.m_fileOffsetBytes;
-    AddSequenceIfIncluded(corpus, currentKey, sd);
+    AddSequenceIfIncluded(corpus, previousId, sd);
 }
 
 void Indexer::AddSequenceIfIncluded(CorpusDescriptorPtr corpus, size_t sequenceId, SequenceDescriptor& sd)
 {
-    auto key = std::to_string(sequenceId);
     if (corpus->IsIncluded(corpus->IdToKey(sequenceId)))
     {
-        if (corpus->IsIncluded(key))
-        {
-            sd.m_key.m_sequence = corpus->KeyToId(key);
-            sd.m_key.m_sample = 0;
-            m_index.AddSequence(sd);
-        }
-    }
-    else
-    {
-        if (corpus->IsIncluded(key))
-        {
-            sd.m_key.m_sequence = corpus->KeyToId(key);
-            sd.m_key.m_sample = 0;
-            m_index.AddSequence(sd);
-        }
+        sd.m_key.m_sequence = sequenceId;
+        sd.m_key.m_sample = 0;
+        m_index.AddSequence(sd);
     }
 }
 
