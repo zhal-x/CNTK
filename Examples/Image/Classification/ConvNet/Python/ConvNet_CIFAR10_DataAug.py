@@ -32,11 +32,11 @@ def create_reader(map_file, mean_file, is_training):
     transforms = []
     if is_training:
         transforms += [
-            cntk.io.ImageDeserializer.crop(crop_type='randomside', side_ratio=0.8, jitter_type='uniratio') # train uses jitter
+            cntk.io.ImageTransform.crop(crop_type='randomside', side_ratio=0.8, jitter_type='uniratio') # train uses jitter
         ]
     transforms += [
-        cntk.io.ImageDeserializer.scale(width=image_width, height=image_height, channels=num_channels, interpolations='linear'),
-        cntk.io.ImageDeserializer.mean(mean_file)
+        cntk.io.ImageTransform.scale(width=image_width, height=image_height, channels=num_channels, interpolations='linear'),
+        cntk.io.ImageTransform.mean(mean_file)
     ]
     # deserializer
     return cntk.io.MinibatchSource(cntk.io.ImageDeserializer(map_file, cntk.io.StreamDefs(
@@ -55,17 +55,17 @@ def convnet_cifar10_dataaug(reader_train, reader_test, epoch_size = 50000, max_e
     # apply model to input
     scaled_input = cntk.ops.element_times(cntk.ops.constant(0.00390625), input_var)
 
-    with cntk.layers.default_options(activation=cntk.ops.relu, pad=True): 
+    with cntk.layers.default_options(activation=cntk.ops.relu, pad=True):
         z = cntk.models.Sequential([
             cntk.models.LayerStack(2, lambda : [
-                cntk.layers.Convolution2D((3,3), 64), 
-                cntk.layers.Convolution2D((3,3), 64), 
+                cntk.layers.Convolution2D((3,3), 64),
+                cntk.layers.Convolution2D((3,3), 64),
                 cntk.layers.MaxPooling((3,3), (2,2))
-            ]), 
+            ]),
             cntk.models.LayerStack(2, lambda i: [
-                cntk.layers.Dense([256,128][i]), 
+                cntk.layers.Dense([256,128][i]),
                 cntk.layers.Dropout(0.5)
-            ]), 
+            ]),
             cntk.layers.Dense(num_classes, activation=None)
         ])(scaled_input)
 
@@ -82,7 +82,7 @@ def convnet_cifar10_dataaug(reader_train, reader_test, epoch_size = 50000, max_e
     mm_time_constant       = [0]*20 + [600]*20 + [1200]
     mm_schedule            = cntk.learner.momentum_as_time_constant_schedule(mm_time_constant, epoch_size=epoch_size)
     l2_reg_weight          = 0.002
-    
+
     # trainer object
     learner = cntk.learner.momentum_sgd(z.parameters, lr_schedule, mm_schedule,
                                         l2_regularization_weight = l2_reg_weight)
@@ -108,7 +108,7 @@ def convnet_cifar10_dataaug(reader_train, reader_test, epoch_size = 50000, max_e
 
         progress_printer.epoch_summary(with_metric=True)
         z.save_model(os.path.join(model_path, "ConvNet_CIFAR10_DataAug_{}.dnn".format(epoch)))
-    
+
     ### Evaluation action
     epoch_size     = 10000
     minibatch_size = 16

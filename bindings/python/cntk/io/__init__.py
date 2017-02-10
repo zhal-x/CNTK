@@ -224,11 +224,8 @@ def _py_dict_to_cntk_dict(py_dict):
                     l.append(cntk_py.DictionaryValueFromDict(
                         _py_dict_to_cntk_dict(e)))
                 else:
-                    #FIXME: what's the right way to do this
-                    try:
-                        l.append(cntk_py.DictionaryValue(e))
-                    except:
-                        l.append(e.self.to_dictionary_value())
+                    l.append(e.as_dictionary_value())
+                    #l.append(cntk_py.DictionaryValue(e))
             res[k] = cntk_py.DictionaryValue(l)
         else:
             res[k] = cntk_py.DictionaryValue(v)
@@ -270,7 +267,7 @@ class ReaderConfig(dict):
         self['randomize'] = randomize
         self['randomizationWindow'] = cntk_py.SizeTWrapper(randomization_window)
         self['distributedAfterSampleCount'] = cntk_py.SizeTWrapper(distributed_after)
-        if multithreaded_deserializer != None:
+        if multithreaded_deserializer is not None:
             self['multiThreadedDeserialization'] = multithreaded_deserializer
 
     @typemap
@@ -310,7 +307,28 @@ class Deserializer(cntk_py.Deserializer):
     def __init__(self, type):
         pass
 
-class ImageDeserializer(cntk_py.Deserializer):
+def ImageDeserializer(filename, streams=None):
+    image_stream_name, label_stream_name = None, None
+    num_labels = 0
+    transforms = []
+    for key in streams:
+        s = streams[key]
+        alias = s.stream_alias
+        if alias == "image":
+            image_stream_name = key
+            transforms = s.transforms
+        elif alias == "label":
+            label_stream_name = key
+            num_labels = s.dim
+        else:
+            raise ValueError("ImageDeserializer: invalid field name '{}', allowed are 'image' and 'label'".format(alias))
+    if image_stream_name is None:
+        raise ValueError("ImageDeserializer: image stream name not specified")
+    if label_stream_name is None:
+        raise ValueError("ImageDeserializer: label stream name not specified")
+    return cntk_py.Deserializer_image_deserializer(filename, label_stream_name, num_labels, image_stream_name, transforms)
+
+class ImageTransofrm:
     '''
     This class configures the image reader that reads images and corresponding
     labels from a file of the form::
@@ -327,26 +345,6 @@ class ImageDeserializer(cntk_py.Deserializer):
     See also:
         `Image reader definition <https://github.com/microsoft/cntk/wiki/Image-reader>`_
     '''
-    def __init__(self, filename, streams=None):
-        image_stream_name, label_stream_name = None, None
-        num_labels = 0
-        transforms = []
-        for key in streams:
-            s = streams[key]
-            alias = s.stream_alias
-            if alias == "image":
-                image_stream_name = key
-                transforms = s.transforms
-            elif alias == "label":
-                label_stream_name = key
-                num_labels = s.dim
-            else:
-                raise ValueError("ImageDeserializer: invalid field name '{}', allowed are 'image' and 'label'".format(alias))
-        if image_stream_name is None:
-            raise ValueError("ImageDeserializer: image stream name not specified")
-        if label_stream_name is None:
-            raise ValueError("ImageDeserializer: label stream name not specified")
-        self.self = cntk_py.Deserializer_image_deserializer(filename, label_stream_name, num_labels, image_stream_name, transforms)
 
     @staticmethod
     def crop(crop_type='center', crop_size=0, side_ratio=0.0, area_ratio=0.0, aspect_ratio=1.0, jitter_type='none'):
@@ -479,7 +477,7 @@ class ImageDeserializer(cntk_py.Deserializer):
     #        dict describing the mean transform        '''
     #    return dict(type='Intensity', intensityStdDev=intensity_stddev, intensityFile=intensity_file)
 
-class CTFDeserializer(Deserializer):
+def CTFDeserializer(filename, streams):
     '''
     This class configures the text reader that reads text-encoded files from a
     file with lines of the form::
@@ -496,9 +494,8 @@ class CTFDeserializer(Deserializer):
     See also:
         `CNTKTextReader format <https://github.com/microsoft/cntk/wiki/CNTKTextFormat-Reader>`_
     '''
-    def __init__(self, filename, streams):
-        sc = [cntk_py.StreamConfiguration(k, s.dim, s.is_sparse, s.stream_alias) for k,s in streams.items()] 
-        self.self = cntk_py.Deserializer_ctfdeserializer(filename, sc)
+    sc = [cntk_py.StreamConfiguration(k, s.dim, s.is_sparse, s.stream_alias) for k,s in streams.items()] 
+    return cntk_py.Deserializer_ctfdeserializer(filename, sc)
 
 
 # TODO: this should be a private class; use StreamDef instead

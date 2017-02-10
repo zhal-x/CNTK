@@ -9,7 +9,7 @@ import os
 import numpy as np
 from cntk import load_model, graph
 from cntk.ops import combine
-from cntk.io import MinibatchSource, ImageDeserializer, StreamDef, StreamDefs
+from cntk.io import MinibatchSource, ImageDeserializer, ImageTransform, StreamDef, StreamDefs
 from cntk import graph
 
 
@@ -20,14 +20,14 @@ def print_all_node_names(model_file, is_BrainScript=True):
         loaded_model = combine([loaded_model.outputs[0]])
     node_list = graph.depth_first_search(loaded_model, lambda x: isinstance(x, Function))
     print("printing node information in the format")
-    for node in node_list: 
+    for node in node_list:
         print("Node name:", node.name)
-        for out in node.outputs: 
+        for out in node.outputs:
             print("Output name and shape:", out.name, out.shape)
 
 
 def create_mb_source(image_height, image_width, num_channels, map_file):
-    transforms = [ImageDeserializer.scale(width=image_width, height=image_height, channels=num_channels, interpolations='linear')]
+    transforms = [ImageTransform.scale(width=image_width, height=image_height, channels=num_channels, interpolations='linear')]
     return MinibatchSource(ImageDeserializer(map_file, StreamDefs(
         features=StreamDef(field='image', transforms=transforms),  # first column in map file is referred to as 'image'
         labels=StreamDef(field='label', shape=1000))),             # and second as 'label'. TODO: add option to ignore labels

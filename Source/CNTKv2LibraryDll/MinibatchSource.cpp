@@ -382,7 +382,8 @@ namespace CNTK
         Deserializer img;
         std::vector<DictionaryValue> actualTransforms;
         //TODO: make this work with implicit conversion 
-        std::transform(transforms.begin(), transforms.end(), std::back_inserter(actualTransforms), [](ImageTransform t) { return t.toDictionaryValue(); });
+        //std::transform(transforms.begin(), transforms.end(), std::back_inserter(actualTransforms), [](ImageTransform t) { return static_cast<DictionaryValue>(t); });
+        std::transform(transforms.begin(), transforms.end(), std::back_inserter(actualTransforms), [](ImageTransform t) { return t.AsDictionaryValue(); });
         Dictionary labeldim;
         labeldim[L"labelDim"] = numLabels;
         Dictionary xforms;
@@ -444,7 +445,9 @@ namespace CNTK
         size_t epochSize, bool randomize, size_t memoryBudget, const std::unordered_map<std::wstring, DictionaryValue>& additionalOptions)
     {
         std::vector<DictionaryValue> actualDeserializers;
-        std::transform(deserializers.begin(), deserializers.end(), std::back_inserter(actualDeserializers), [](const Deserializer& d) { return d.toDictionaryValue(); });
+        //TODO: make this work with implicit conversion 
+        //std::transform(deserializers.begin(), deserializers.end(), std::back_inserter(actualDeserializers), [](const Deserializer& d) { return static_cast<DictionaryValue>(d); });
+        std::transform(deserializers.begin(), deserializers.end(), std::back_inserter(actualDeserializers), [](const Deserializer& d) { return d.AsDictionaryValue(); });
         AddConfig(L"deserializers", actualDeserializers, L"epochSize", epochSize, L"randomize", randomize, L"randomizationWindow", memoryBudget);
         for (const auto& entry : additionalOptions)
             AddConfig(entry.first.c_str(), entry.second);

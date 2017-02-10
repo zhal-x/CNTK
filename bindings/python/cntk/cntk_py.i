@@ -361,7 +361,7 @@ fail:   return false;
                     PyObject *dvp = DictionaryValueToPy(it->second);
                     PyDict_SetItem(val, key, dvp);
                     Py_DECREF(key);
-                    Py_DECREF(val);
+                    Py_DECREF(dvp);
                 }
                 break;
             case CNTK::DictionaryValue::Type::NDArrayView:
@@ -450,6 +450,12 @@ public:
 
     void __setitem__(const wchar_t* key, CNTK::DictionaryValue value) {
         (*($self))[key] = value;
+    }
+}
+
+%extend CNTK::Record {
+    PyObject* __getitem__(const wchar_t* key) {
+        return DictionaryValueToPy((*($self))[key]);
     }
 }
 
