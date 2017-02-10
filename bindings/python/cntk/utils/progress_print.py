@@ -199,6 +199,7 @@ class ProgressPrinter(object):
             if with_metric:
                 self.update_value('epoch_avg_metric', avg_metric * 100.0, self.epochs)
 
+            self.reset_last() # reset *_since_last at the end of epoch
             return avg_loss, avg_metric, samples  # BUGBUG: for freq=0, we don't return anything here
 
     def ___generate_progress_heartbeat(self):

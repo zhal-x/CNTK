@@ -320,9 +320,9 @@ namespace CNTK
             }
 
             if (accumulated->GetDataType() == DataType::Float)
-                accumulated->Data()->GetWritableTensorView<float>()->AddCopyOf(*value->Data()->GetWritableTensorView<float>());
+                accumulated->Data()->GetWritableTensorView<float>()->AddCopyOf(*value->Data()->GetTensorView<float>());
             else
-                accumulated->Data()->GetWritableTensorView<double>()->AddCopyOf(*value->Data()->GetWritableTensorView<double>());
+                accumulated->Data()->GetWritableTensorView<double>()->AddCopyOf(*value->Data()->GetTensorView<double>());
 
             return created;
         };
@@ -350,8 +350,6 @@ namespace CNTK
         if (m_aggregatedEvaluationFunction)
             m_prevMinibatchAggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
 
-        AccumulatePrevMinibatch(computeDevice);
-
         for (auto outputToFetch : outputsToFetch)
         {
             if (outputToFetch.second == nullptr)
@@ -378,6 +376,8 @@ namespace CNTK
         // TODO: Why Backward signature does not take Parameter instead of Variable for gradients?
         m_combinedTrainingFunction->Backward(backPropSate, { { m_aggregatedLossFunction, m_rootGradientValue } }, parameterGradients);
         m_prevMinibatchNumSamples = GetSampleCount(m_trainingSampleCountVar, outputs[m_trainingSampleCountVar]);
+
+        AccumulatePrevMinibatch(computeDevice);
     }
 
     static std::wstring GetTrainerStateCheckpointFilePath(const std::wstring& modelFilePath)
