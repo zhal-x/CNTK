@@ -509,11 +509,6 @@ fail:
     $result = container;
 }
 
-%typemap(freearg) std::vector<CNTK::Variable> const& {
-    //freearg std::vector<CNTK::ImageTransform>
-    delete $1;
-}
-
 
 %define %eq_for(DATA_TYPE, EQ)
 %rename(EQ) operator==(const DATA_TYPE&, const DATA_TYPE&);
