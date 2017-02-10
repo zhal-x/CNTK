@@ -85,7 +85,9 @@ def train(reader, model, max_epochs):
                        low_memory=True,
                        gradient_clipping_threshold_per_sample=15, gradient_clipping_with_truncation=True)
 
-    progress_printer = ProgressPrinter(freq=100)
+    # more detailed logging
+    progress_printer = ProgressPrinter(freq=100, first=10, tag='Training')
+    #progress_printer = ProgressPrinter(tag='Training')
     tensorboard_writer = TensorBoardProgressWriter(freq=100, log_dir='atis_log', model=z)
 
     trainer = Trainer(z, (ce, pe), [learner], [progress_printer, tensorboard_writer])

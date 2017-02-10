@@ -6,7 +6,7 @@
 import sys
 from . import cntk_py
 from .device import use_default_device
-from .utils import sanitize_var_map, sanitize_function, typemap, value_to_seq, ProgressPrinter
+from .utils import sanitize_var_map, sanitize_function, typemap, value_to_seq
 from .io import _py_dict_to_cntk_dict
 
 __doc__ = '''\
@@ -127,12 +127,22 @@ class TrainingSession(cntk_py.TrainingSession):
         Callback that gets executed at the end of each minibatch.
         '''
         # Only log progress if the trainer did not do it yet.
-        if not self.trainer.progress_writers and self.trainer.total_number_of_samples_seen != 0:
+        if self.trainer.progress_writers:
+            return
+
+        if (self.trainer.total_number_of_samples_seen != 0 and self.trainer.previous_minibatch_sample_count != 0):
             for progress_writer in self.progress_writers:
-                progress_writer.update_training_progress(
+                progress_writer.update_training(
                     self.trainer.previous_minibatch_sample_count,
                     self.trainer.previous_minibatch_loss_average,
                     self.trainer.previous_minibatch_evaluation_average)
+
+    def on_cross_validation_minibatch_end(self, index, average_error, number_of_samples):
+        '''
+        Callback that gets executed at the end of each cross-validation minibatch.
+        '''
+        for progress_writer in self.progress_writers:
+            progress_writer.update_cross_validation(number_of_samples, average_error)
 
     def on_progress(self, index):
         '''
@@ -144,22 +154,17 @@ class TrainingSession(cntk_py.TrainingSession):
         for progress_writer in self.progress_writers:
             progress_writer.write_training_summary(with_metric=True)
 
-    def on_cross_validation_end(self, index, average_error, num_samples, num_minibatches):
+    def on_cross_validation_end(self, index):
         '''
         Callback that gets executed at the end of cross validation.
 
         Args:
             index (int): index of the current callback.
-            average_error (float): average error for the cross validation
-            num_samples (int): number of samples in cross validation
-            num_minibatches (int): number of minibatch in cross validation
         '''
-        for progress_writer in self.progress_writers:
-            # TODO: refactor to support different progress writers.
-            if isinstance(progress_writer, ProgressPrinter):
-                msg = "Cross Validation [{}]: Minibatch[1-{}]: errs = {:0.2f}% * {}".format(
-                    index + 1, num_minibatches, average_error * 100, num_samples)
-                progress_writer.log(msg)
+        # Only log progress if the trainer did not do it yet.
+        if not self.trainer.progress_writers:
+            for progress_writer in self.progress_writers:
+                progress_writer.write_cross_validation_summary()
 
 
 @typemap

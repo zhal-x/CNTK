@@ -4,32 +4,23 @@
 # for full license information.
 # ==============================================================================
 from __future__ import print_function
+import os
 import time
 
 
-class BaseProgressWriter(object):
-    '''Parent of all classes that want to record training progress. Cannot be used directly.'''
+class _Progress(object):
+    # Private class. Facilitates tracking training/cross-validation progress.
 
-    def __init__(self, frequency=None, first=0):
-        '''
-        Constructor.
-
-        Args:
-            frequency (`int` or `None`, default `None`):  determines how often the actual writing will occur.
-              A value of 0 means a geometric schedule (1, 2, 4, 8...).
-              A value > 0 means an arithmetic schedule (3, 9, 12... when ``freq`` is 3)
-              A value of None means no per-minibatch writes.
-            first (`int`, default 0): only start writing after the minibatch number is greater or equal to ``first``.
-        '''
-        if (frequency is not None) and (frequency < 0):
-            raise ValueError('frequency must be a positive integer')
+    def __init__(self, write_frequency, write_first_n):
+        if (write_frequency is not None) and (write_frequency < 0):
+            raise ValueError('training_write_frequency must be a positive integer')
 
         from sys import maxsize
-        if frequency is None:
-            frequency = maxsize
+        if write_frequency is None:
+            write_frequency = maxsize
 
-        self.freq = frequency
-        self.first = first
+        self.write_first_n = write_first_n
+        self.write_frequency = write_frequency
         self.loss_since_start = 0
         self.metric_since_start = 0
         self.samples_since_start = 0
@@ -41,15 +32,42 @@ class BaseProgressWriter(object):
         self.epochs = 0
         self.epoch_start_time = 0
 
-    def update_training_progress(self, samples, avg_loss, avg_metric=None):
-        '''
-        Updates the writer with the recent training results.
+    def avg_loss_since_start(self):
+        return self.loss_since_start / self.samples_since_start
 
-        Args:
-            samples (`int`): number of samples used in training since the last call to this function.
-            avg_loss (`float`): average value of a loss function per sample.
-            avg_metric (`float` or `None`, default `None`): optionally, average value of a metric per sample.
-        '''
+    def avg_metric_since_start(self):
+        return self.metric_since_start / self.samples_since_start
+
+    def avg_loss_since_last(self):
+        return self.loss_since_last / self.samples_since_last
+
+    def avg_metric_since_last(self):
+        return self.metric_since_last / self.samples_since_last
+
+    def time_since_start(self):
+        if self.epoch_start_time == 0:
+            return 0
+        else:
+            return time.time() - self.epoch_start_time
+
+    def reset_start(self):
+        ret = (0, 0, 0, 0)
+        if self.samples_since_start > 0:
+            ret = (self.samples_since_start, self.updates_since_start,
+                   self.avg_loss_since_start(), self.avg_metric_since_start(), self.time_since_start())
+
+        self.epochs += 1
+        self.loss_since_start = 0
+        self.metric_since_start = 0
+        self.samples_since_start = 0
+        self.updates_since_start = 0
+        self.epoch_start_time = time.time()
+        return ret
+
+    def update(self, samples, avg_loss, avg_metric=None):
+        if samples == 0:
+            return
+
         self.samples_since_start += samples
         self.samples_since_last += samples
         self.loss_since_start += avg_loss * samples
@@ -64,71 +82,89 @@ class BaseProgressWriter(object):
         if self.epoch_start_time == 0:
             self.epoch_start_time = time.time()
 
-        if self.freq == 0 and (self.updates_since_start + 1) & self.updates_since_start == 0:
-            last_avg_loss, last_avg_metric, last_num_samples = self._reset_last()
-            self._write_progress_update(last_num_samples, last_avg_loss,
-                                        last_avg_metric if avg_metric is not None else None, 0)
-        elif self.freq > 0 and (self.updates_since_start % self.freq == 0 or self.updates_since_start <= self.first):
-            last_avg_loss, last_avg_metric, last_num_samples = self._reset_last()
+        if self.write_frequency == 0 and (self.updates_since_start + 1) & self.updates_since_start == 0:
+            avg_loss, avg_metric, num_samples = self._reset_last()
+            return num_samples, avg_loss, avg_metric, 0
+        elif self.write_frequency> 0 and (self.updates_since_start % self.write_frequency == 0
+                                          or self.updates_since_start <= self.write_first_n):
+            avg_loss, avg_metric, num_samples = self._reset_last()
 
-            if self.updates_since_start <= self.first:  # updates for individual MBs
+            if self.updates_since_start <= self.write_first_n:  # updates for individual MBs
                 first_mb = self.updates_since_start
             else:
-                first_mb = max(self.updates_since_start - self.freq + 1, self.first + 1)
+                first_mb = max(self.updates_since_start - self.write_frequency + 1, self.write_first_n + 1)
 
-            self._write_progress_update(last_num_samples, last_avg_loss,
-                                        last_avg_metric if avg_metric is not None else None, first_mb)
-
-    def write_training_summary(self, with_metric=False):
-        '''
-        Write a summary of progress since the last call to this function.
-
-        Args:
-            with_metric (`bool`, default `False`): indicates whether the metric summary should be included in the
-             output.
-        '''
-        self.epochs += 1
-        epoch_end_time = time.time()
-        avg_loss, avg_metric, samples = (0, 0, 0)
-        if self.samples_since_start != 0:
-            avg_loss, avg_metric, samples = self._reset_start()
-
-        time_delta = epoch_end_time - self.epoch_start_time
-        self.epoch_start_time = epoch_end_time
-        return self._write_progress_summary(samples, avg_loss, avg_metric if with_metric else None, time_delta)
-
-    def _avg_loss_since_start(self):
-        return self.loss_since_start / self.samples_since_start
-
-    def _avg_metric_since_start(self):
-        return self.metric_since_start / self.samples_since_start
-
-    def _avg_loss_since_last(self):
-        return self.loss_since_last / self.samples_since_last
-
-    def _avg_metric_since_last(self):
-        return self.metric_since_last / self.samples_since_last
-
-    def _reset_start(self):
-        ret = self._avg_loss_since_start(), self._avg_metric_since_start(), self.samples_since_start
-        self.loss_since_start = 0
-        self.metric_since_start = 0
-        self.samples_since_start = 0
-        self.updates_since_start = 0
-        return ret
+            return num_samples, avg_loss, avg_metric, first_mb
 
     def _reset_last(self):
-        ret = self._avg_loss_since_last(), self._avg_metric_since_last(), self.samples_since_last
+        ret = self.avg_loss_since_last(), self.avg_metric_since_last(), self.samples_since_last
         self.loss_since_last = 0
         self.metric_since_last = 0
         self.samples_since_last = 0
         return ret
 
-    def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
+
+class BaseProgressWriter(object):
+    '''Parent of all classes that want to record training progress. Cannot be used directly.'''
+
+    def __init__(self, training_write_frequency=None, training_write_first_n=0,
+                 cv_write_frequency=None, cv_write_first_n=0):
+        self.training = _Progress(training_write_frequency, training_write_first_n)
+        self.cv = _Progress(cv_write_frequency, cv_write_first_n)
+
+    def update_training(self, samples, avg_loss, avg_metric=None):
+        '''
+        Updates the writer with the recent training results.
+
+        Args:
+            samples (`int`): number of samples used in training since the last call to this function.
+            avg_loss (`float`): average value of a loss function per sample.
+            avg_metric (`float` or `None`, default `None`): optionally, average value of a metric per sample.
+        '''
+        data = self.training.update(samples, avg_loss, avg_metric)
+        if data:
+            with_metric = avg_metric is not None
+            self._write_training_update(*data, with_metric=with_metric)
+
+    def update_cross_validation(self, samples, avg_metric):
+        '''
+        Updates the writer with the recent cross-validation results.
+
+        Args:
+            samples (`int`): number of samples used in training since the last call to this function.
+            avg_metric (`float`): average value of a metric per sample.
+        '''
+        data = self.cv.update(samples, 0, avg_metric)
+        if data:
+            self._write_cv_update(*data)
+
+    def write_training_summary(self, with_metric=False):
+        '''
+        Write a summary of training progress since the last call to this function.
+
+        Args:
+            with_metric (`bool`, default `False`): indicates whether the metric summary should be included in the
+             output.
+        '''
+        return self._write_training_summary(*self.training.reset_start(), with_metric=with_metric)
+
+    def write_cross_validation_summary(self):
+        '''Write a summary of cross validation progress since the last call to this function.'''
+        return self._write_cv_summary(*self.cv.reset_start())
+
+    def _write_training_update(self, samples, avg_loss, avg_metric, first_mb, with_metric):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
-    def _write_progress_summary(self, samples, avg_loss, avg_metric, time_delta):
+    def _write_cv_update(self, samples, avg_loss, avg_metric, first_mb):
+        # To be overriden in derived classes.
+        raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
+
+    def _write_training_summary(self, samples, updates, avg_loss, avg_metric, time_delta, with_metric):
+        # To be overriden in derived classes.
+        raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
+
+    def _write_cv_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
@@ -145,38 +181,38 @@ class ProgressPrinter(BaseProgressWriter):
 
     It provides the number of samples, average loss and average metric
     since the last output or since the start of accumulation.
-
-    Args:
-        freq (int or None, default None):  determines how often
-         printing will occur. The value of 0 means an geometric
-         schedule (1,2,4,...). A value > 0 means a arithmetic schedule
-         (a log print for minibatch number: ``freq``, a log print for minibatch number: 2*``freq``,
-         a log print for minibatch number: 3*``freq``,...), and a value of None means no per-minibatch log.
-        first (int, default 0): Only start logging after the minibatch number is greater or equal to ``first``.
-        tag (string, default EmptyString): prepend minibatch log lines with your own string
-        log_to_file (string or None, default None): if None, output log data to stdout.
-         If a string is passed, the string is path to a file for log data.
-        gen_heartbeat (bool, default False): If True output a progress message every 10 seconds or so to stdout.
-        num_epochs (int, default 300): The total number of epochs to be trained.  Used for some metadata.
-         This parameter is optional.
     '''
 
-    def __init__(self, freq=None, first=0, tag='', log_to_file=None, rank=None, gen_heartbeat=False, num_epochs=300):
+    def __init__(self, freq=None, first=0, tag='', log_to_file=None, rank=None, gen_heartbeat=False, num_epochs=300,
+                 cv_write_frequency=None, cv_write_first_n=0):
         '''
-        Constructor. The optional ``freq`` parameter determines how often
-        printing will occur. The value of 0 means an geometric
-        schedule (1,2,4,...). A value > 0 means a arithmetic schedule
-        (freq, 2*freq, 3*freq,...), and a value of None means no per-minibatch log.
-        set log_to_file if you want the output to go file instead of stdout.
-        set rank to distributed.rank if you are using distributed parallelism -- each rank's log will go to separate
-        file.
+        Constructor.
+
+        Args:
+            freq (`int` or `None`, default `None`):  determines how often
+              printing will occur. The value of 0 means an geometric
+              schedule (1,2,4,...). A value > 0 means a arithmetic schedule
+              (a log print for minibatch number: ``freq``, a log print for minibatch number: 2*``freq``,
+              a log print for minibatch number: 3*``freq``,...), and a value of None means no per-minibatch log.
+            first (`int`, default 0): Only start logging after the minibatch number is greater or equal to ``first``.
+            tag (`string`, default EmptyString): prepend minibatch log lines with your own string
+            log_to_file (`string` or `None`, default `None`): if None, output log data to stdout.
+              If a string is passed, the string is path to a file for log data.
+            rank (`int` or `None`, default `None`): set this to distributed.rank if you are using distributed
+              parallelism -- each rank's log will go to separate file.
+            gen_heartbeat (`bool`, default `False`): If True output a progress message every 10 seconds or so to stdout.
+            num_epochs (`int`, default 300): The total number of epochs to be trained.  Used for some metadata.
+              This parameter is optional.
+            cv_write_frequency (`int` or `None`, default `None`): similar to ``freq``, but applies to
+              printing intermediate cross validation results.
+            cv_write_first_n (`int`, default 0): similar to ``first``, but applies to printing intermediate
+              cross validation results.
         '''
-        super(ProgressPrinter, self).__init__(freq, first)
+        super(ProgressPrinter, self).__init__(freq, first, cv_write_frequency, cv_write_first_n)
 
         self.tag = '' if not tag else "[{}] ".format(tag)
         self.progress_timer_time = 0
         self.log_to_file = log_to_file
-        self.rank = rank
         self.gen_heartbeat = gen_heartbeat
         self.num_epochs = num_epochs
 
@@ -184,8 +220,8 @@ class ProgressPrinter(BaseProgressWriter):
         if self.log_to_file is not None:
             self.logfilename = self.log_to_file
 
-            if self.rank is not None:
-                self.logfilename = self.logfilename + 'rank' + str(self.rank)
+            if rank is not None:
+                self.logfilename = self.logfilename + 'rank' + str(rank)
 
             # print to stdout
             print("Redirecting log to file " + self.logfilename)
@@ -202,82 +238,53 @@ class ProgressPrinter(BaseProgressWriter):
             self._logprint('    loss       last     metric       last              ')
             self._logprint(' ------------------------------------------------------')
 
-    def update_training_progress(self, samples, loss, metric=None):
-        # Override for BaseProgressWriter._update_progress.
-        super(ProgressPrinter, self).update_training_progress(samples, loss, metric)
-        self._generate_progress_heartbeat()
-
     def end_progress_print(self, msg=""):
         '''
-        Prints the given message signifying the end of training.
+        DEPRECATED. Prints the given message signifying the end of training.
 
         Args:
             msg (`string`, default ''): message to print.
         '''
+        _warn_deprecated('The method was deprecated.')
         self._logprint('CNTKCommandTrainEnd: train')
         if msg != "" and self.log_to_file is not None:
             self._logprint(msg)
 
     def avg_loss_since_start(self):
-        '''DEPRECATED.'''
+        '''
+        DEPRECATED.
+
+        Returns: the average loss since the start of accumulation
+        '''
         _warn_deprecated('The method was deprecated.')
-        return self._avg_loss_since_start()
+        return self.training.avg_loss_since_start()
 
     def avg_metric_since_start(self):
-        '''DEPRECATED.'''
+        '''
+        DEPRECATED.
+
+        Returns: the average metric since the start of accumulation
+        '''
         _warn_deprecated('The method was deprecated.')
-        return self._avg_metric_since_start()
+        return self.training.avg_metric_since_start()
 
     def avg_loss_since_last(self):
-        '''DEPRECATED.'''
+        '''
+        DEPRECATED.
+
+        Returns: the average loss since the last print
+        '''
         _warn_deprecated('The method was deprecated.')
-        return self._avg_loss_since_last()
+        return self.training.avg_loss_since_last()
 
     def avg_metric_since_last(self):
-        '''DEPRECATED.'''
+        '''
+        DEPRECATED.
+
+        Returns: the average metric since the last print
+        '''
         _warn_deprecated('The method was deprecated.')
-        return self._avg_metric_since_last()
-
-    def update_with_trainer(self, trainer, with_metric=False):
-        '''
-        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_training_progress` instead.
-
-        Update the current loss, the minibatch size and optionally the metric using the information from the
-        ``trainer``.
-
-        Args:
-            trainer (:class:`cntk.trainer.Trainer`): trainer from which information is gathered
-            with_metric (`bool`): whether to update the metric accumulators
-        '''
-        if self.updates_since_start:
-            # Only warn once per epoch to avoid flooding with warnings.
-            _warn_deprecated('Use ProgressPrinter.update_progress() instead.')
-        if trainer.previous_minibatch_sample_count == 0:
-            return
-        self.update_training_progress(
-            trainer.previous_minibatch_sample_count,
-            trainer.previous_minibatch_loss_average,
-            trainer.previous_minibatch_evaluation_average if with_metric else None)
-
-    def log(self, message):
-        self._logprint(message)
-
-    def update(self, loss, minibatch_size, metric=None):
-        '''
-        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_training_progress` instead.
-
-        Updates the accumulators using the loss, the minibatch_size and the optional metric.
-
-        Args:
-            loss (`float`): the value with which to update the loss accumulators
-            minibatch_size (`int`): the value with which to update the samples accumulator
-            metric (`float` or `None`): if `None` do not update the metric
-             accumulators, otherwise update with the given value
-        '''
-        if self.updates_since_start > 0:
-            # Only warn once per epoch to avoid flooding with warnings.
-            _warn_deprecated('Use ProgressPrinter.update_with_trainer() instead.')
-        self.update_training_progress(minibatch_size, loss, metric)
+        return self.training.avg_metric_since_last()
 
     def epoch_summary(self, with_metric=False):
         '''
@@ -292,42 +299,102 @@ class ProgressPrinter(BaseProgressWriter):
         _warn_deprecated('Use ProgressPrinter.summarize_progress() instead.')
         return self.write_training_summary(with_metric)
 
-    def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
+    def update(self, loss, minibatch_size, metric=None):
+        '''
+        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_training` instead.
+
+        Updates the accumulators using the loss, the minibatch_size and the optional metric.
+
+        Args:
+            loss (`float`): the value with which to update the loss accumulators
+            minibatch_size (`int`): the value with which to update the samples accumulator
+            metric (`float` or `None`): if `None` do not update the metric
+             accumulators, otherwise update with the given value
+        '''
+        if self.training.updates_since_start > 0:
+            # Only warn once per epoch to avoid flooding with warnings.
+            _warn_deprecated('Use ProgressPrinter.update_with_trainer() instead.')
+        self.update_training(minibatch_size, loss, metric)
+
+    def update_with_trainer(self, trainer, with_metric=False):
+        '''
+        DEPRECATED. Use :func:`cntk.utils.ProgressPrinter.update_training` instead.
+
+        Update the current loss, the minibatch size and optionally the metric using the information from the
+        ``trainer``.
+
+        Args:
+            trainer (:class:`cntk.trainer.Trainer`): trainer from which information is gathered
+            with_metric (`bool`): whether to update the metric accumulators
+        '''
+        if self.training.updates_since_start:
+            # Only warn once per epoch to avoid flooding with warnings.
+            _warn_deprecated('Use ProgressPrinter.update_progress() instead.')
+        if trainer.previous_minibatch_sample_count == 0:
+            return
+        self.update_training(
+            trainer.previous_minibatch_sample_count,
+            trainer.previous_minibatch_loss_average,
+            trainer.previous_minibatch_evaluation_average if with_metric else None)
+
+    def update_training(self, samples, loss, metric=None):
+        # Override for BaseProgressWriter._update_progress.
+        super(ProgressPrinter, self).update_training(samples, loss, metric)
+        if samples != 0:
+            self._generate_progress_heartbeat()
+
+    def _write_training_update(self, samples, avg_loss, avg_metric, first_mb, with_metric):
+        # Override for BaseProgressWriter._write_training_progress_update.
+        self._write_progress_update(self.training, '', samples, avg_loss, avg_metric if with_metric else None, first_mb)
+
+    def _write_cv_update(self, samples, avg_loss, avg_metric, first_mb):
+        # Override for BaseProgressWriter._write_test_progress_update.
+        self._write_progress_update(self.cv, 'Cross Validation ', samples, avg_loss, avg_metric, first_mb)
+
+    def _write_progress_update(self, progress, name, samples, avg_loss, avg_metric, first_mb):
         # Override for BaseProgressWriter._write_progress_update.
-        if self.freq == 0:
+        if progress.write_frequency == 0:
             if avg_metric is not None:
                 self._logprint(' {:8.3g}   {:8.3g}   {:8.3g}   {:8.3g}    {:10d}'.format(
                     self.avg_loss_since_start(), avg_loss,
                     self.avg_metric_since_start(), avg_metric,
-                    self.samples_since_start))
+                    progress.samples_since_start))
             else:
                 self._logprint(' {:8.3g}   {:8.3g}   {:8s}   {:8s}    {:10d}'.format(
                     self.avg_loss_since_start(), avg_loss,
-                    '', '', self.samples_since_start))
+                    '', '', self.cv.samples_since_start))
         else:
             if avg_metric is not None:
-                self._logprint(' Minibatch[{:4d}-{:4d}]: loss = {:0.6f} * {:d}, metric = {:0.1f}% * {:d};'.format(
-                    first_mb, self.updates_since_start, avg_loss, samples, avg_metric * 100.0, samples))
+                self._logprint(' {}Minibatch[{:4d}-{:4d}]: loss = {:0.6f} * {:d}, metric = {:0.1f}% * {:d};'.format(
+                    name, first_mb, progress.updates_since_start, avg_loss, samples, avg_metric * 100.0, samples))
             else:
-                self._logprint(' Minibatch[{:4d}-{:4d}]: loss = {:0.6f} * {:d};'.format(
-                    first_mb, self.updates_since_start, avg_loss, samples))
+                self._logprint(' {}Minibatch[{:4d}-{:4d}]: loss = {:0.6f} * {:d};'.format(
+                    name, first_mb, progress.updates_since_start, avg_loss, samples))
 
-    def _write_progress_summary(self, samples, avg_loss, avg_metric, time_delta):
-        # Override for BaseProgressWriter._write_progress_summary.
+    def _write_training_summary(self, samples, updates, avg_loss, avg_metric, time_delta, with_metric):
+        # Override for BaseProgressWriter._write_training_summary.
         # Only log epoch summary when on arithmetic schedule.
-        if self.freq == 0:
+        if self.training.write_frequency == 0:
             return
 
         speed = samples / time_delta if time_delta > 0 else 0
 
-        if avg_metric is not None:
-            self._logprint("Finished Epoch[{} of {}]: {}loss = {:0.6f} * {}, metric = {:0.1f}% * {} {:0.3f}s ({:5.1f} samples per second);".format(
-                self.epochs, self.num_epochs, self.tag, avg_loss, samples, avg_metric * 100.0, samples, time_delta, speed))
+        if with_metric:
+            msg = "Finished Epoch[{} of {}]: {}loss = {:0.6f} * {}, metric = {:0.1f}% * {} {:0.3f}s ({:5.1f} samples per second);".format(
+                self.training.epochs, self.num_epochs, self.tag, avg_loss, samples, avg_metric * 100.0, samples,
+                time_delta, speed)
         else:
-            self._logprint("Finished Epoch[{} of {}]: {}loss = {:0.6f} * {} {:0.3f}s ({:5.1f} samples per second);".format(
-                self.epochs, self.num_epochs, self.tag, avg_loss, samples, time_delta, speed))
+            msg = "Finished Epoch[{} of {}]: {}loss = {:0.6f} * {} {:0.3f}s ({:5.1f} samples per second);".format(
+                self.training.epochs, self.num_epochs, self.tag, avg_loss, samples, time_delta, speed)
 
+        self._logprint(msg)
         return avg_loss, avg_metric, samples
+
+    def _write_cv_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
+        # Override for BaseProgressWriter._write_training_summary.
+        # Only log epoch summary when on arithmetic schedule.
+        self._logprint(" Cross Validation [{}]: Minibatch[1-{}]: errs = {:0.2f}% * {}".format(
+            self.cv.epochs, updates, avg_metric * 100, samples))
 
     def _logprint(self, logline):
         if self.log_to_file is None:
@@ -354,7 +421,7 @@ class TensorBoardProgressWriter(BaseProgressWriter):
     The generated files can be opened in TensorBoard to visualize the progress.
     '''
 
-    def __init__(self, freq=None, log_dir='.', model=None):
+    def __init__(self, freq=None, log_dir='.', rank=None, model=None):
         '''
         Constructor.
 
@@ -366,12 +433,14 @@ class TensorBoardProgressWriter(BaseProgressWriter):
               `:func:cntk.util.TensorBoardFileWriter.summarize_progress` is invoked.
               Must be a positive integer otherwise.
             log_dir (`string`, default '.'): directory where to create a TensorBoard event file.
+            rank (`int` or `None`, default `None`): rank of a worker when using distributed training, or `None` if
+             training locally. If not `None`, event files will be created in log_dir/rank[rank] rather than log_dir.
             model (:class:`cntk.ops.Function` or `None`, default `None`): model graph to plot.
         '''
-        if (freq is not None) and (freq <= 0):
-            raise ValueError('frequency cannot be a negative number')
+        super(TensorBoardProgressWriter, self).__init__(training_write_frequency=freq)
 
-        super(TensorBoardProgressWriter, self).__init__(frequency=freq)
+        if rank is not None:
+            log_dir = os.path.join(log_dir, 'rank' + str(rank))
 
         from cntk import cntk_py
         self.writer = cntk_py.TensorBoardFileWriter(log_dir, model)
@@ -408,18 +477,33 @@ class TensorBoardProgressWriter(BaseProgressWriter):
         self.writer.close()
         self.writer = None
 
-    def _write_progress_update(self, samples, avg_loss, avg_metric, first_mb):
-        # Override for BaseProgressWriter._write_progress_update.
-        self.write_value('train/avg_loss_mb', avg_loss, self.total_updates)
-        if avg_metric is not None:
-            self.write_value('train/avg_metric_mb', avg_metric * 100.0, self.total_updates)
+    def _write_training_update(self, samples, avg_loss, avg_metric, first_mb, with_metric):
+        # Override for BaseProgressWriter._write_training_update.
+        self.write_value('mb/avg_loss', avg_loss, self.training.total_updates)
+        if with_metric:
+            self.write_value('mb/avg_metric', avg_metric * 100.0, self.training.total_updates)
 
-    def _write_progress_summary(self, samples, avg_loss, avg_metric, time_delta):
-        # Override for BaseProgressWriter._write_progress_summary.
-        self.write_value('train/avg_loss_summary', avg_loss, self.epochs)
-        if avg_metric is not None:
-            self.write_value('train/avg_metric_summary', avg_metric * 100.0, self.epochs)
+    def _write_cv_update(self, samples, avg_loss, avg_metric, first_mb):
+        # Override for BaseProgressWriter._write_cv_update.
+        # It is not particularly useful to record per-minibatch cross-validation results in TensorBoard,
+        # hence it is not currently supported.
+        raise NotImplementedError(
+            'TensorBoardProgressWriter does not support recording per-minibatch cross-validation results')
 
+    def _write_training_summary(self, samples, updates, avg_loss, avg_metric, time_delta, with_metric):
+        # Override for BaseProgressWriter._write_training_summary.
+        self.write_value('summary/avg_loss', avg_loss, self.training.epochs)
+        if with_metric:
+            self.write_value('summary/avg_metric', avg_metric * 100.0, self.training.epochs)
+
+    def _write_cv_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
+        # Override for BaseProgressWriter._write_cv_summary.
+        if self.training.total_updates != 0:
+            # Record cross validation summary using training minibatches as a step.
+            # This allows to easier correlate the training and cv metric graphs in TensorBoard.
+            self.write_value('mb/cv_avg_metric', avg_metric * 100.0, self.training.total_updates)
+        else:
+            self.write_value('summary/cv_avg_metric', avg_metric * 100.0, self.cv.epochs)
 
 # print the total number of parameters to log
 def log_number_of_parameters(model, trace_level=0):

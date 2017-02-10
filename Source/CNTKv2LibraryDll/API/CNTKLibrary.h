@@ -4590,6 +4590,16 @@ namespace CNTK
         CNTK_API virtual void OnCheckpointEnd(size_t /*checkpointIndex*/) {};
 
         ///
+        /// Optionally overridable callback that is invoked before each cross-validation minibatch.
+        ///
+        CNTK_API virtual void OnCrossValidationMinibatchStart() {};
+
+        ///
+        /// Optionally overridable callback that is invoked after each cross validation minibatch.
+        ///
+        CNTK_API virtual void OnCrossValidationMinibatchEnd(size_t /*validationIndex*/, double /*averageError*/, size_t /*numberOfSamples*/) {};
+
+        ///
         /// Optionally overridable callback that is invoked before each cross validation.
         ///
         CNTK_API virtual void OnCrossValidationStart(size_t /*validationIndex*/) {};
@@ -4597,7 +4607,7 @@ namespace CNTK
         ///
         /// Optionally overridable callback that is invoked after each cross validation.
         ///
-        CNTK_API virtual void OnCrossValidationEnd(size_t /*validationIndex*/, double /*averageError*/, size_t /*numberOfSamples*/, size_t /*numberOfMinibatches*/) {};
+        CNTK_API virtual void OnCrossValidationEnd(size_t /*validationIndex*/) {};
 
         ///
         /// Optionally overridable callback that is invoked with progress frequency.

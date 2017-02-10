@@ -119,7 +119,7 @@ class Trainer(cntk_py.Trainer):
                     arguments, device)
 
         for progress_writer in self._progress_writers:
-            progress_writer.update_training_progress(
+            progress_writer.update_training(
                 self.previous_minibatch_sample_count,
                 self.previous_minibatch_loss_average,
                 self.previous_minibatch_evaluation_average)
@@ -158,6 +158,7 @@ class Trainer(cntk_py.Trainer):
             device = use_default_device()
         arguments = sanitize_var_map(self.model.arguments, arguments)
 
+        # TODO: update progress_writers
         return super(Trainer, self).test_minibatch(arguments, device)
 
     def save_checkpoint(self, filename, external_state={}):

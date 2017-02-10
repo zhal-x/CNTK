@@ -123,7 +123,7 @@ namespace CNTK
             m_actions.push_back({ checkpointFrequencyInSamples, 0, 0,
                 [this](size_t currentIndex, const DeviceDescriptor&)
                 {
-                    SaveCheckpoint(currentIndex); 
+                    SaveCheckpoint(currentIndex);
                     // enable profiler after the first checkpoint
                     // This has effect only if the profiler is globally enabled by StartProfiler()
                     Microsoft::MSR::CNTK::ProfilerEnable(true);
@@ -159,11 +159,9 @@ namespace CNTK
                 ? m_maxNumberOfSamples - m_trainer->TotalNumberOfSamplesSeen()
                 : 0;
 
-            if (!GetTrainingMinibatch(minibatch, samplesLeft, computeDevice))
-            {
-                // There are no minibatches anymore, so training must stop.
-                break;
-            }
+            // Note that in case of distributed training we don't want to stop if the local minibatch
+            // is empty - it is possible that the other workers are still processing their minibatches.
+            GetTrainingMinibatch(minibatch, samplesLeft, computeDevice);
 
             // Train on the minibatch.
             OnMinibatchStart();
@@ -208,23 +206,24 @@ namespace CNTK
     void TrainingSession::CrossValidate(size_t currentIndex, const DeviceDescriptor& computeDevice)
     {
         std::unordered_map<Variable, ValuePtr> minibatch;
-        double accumulatedError = 0;
         double error;
-        size_t totalNumberOfSamples = 0;
-        size_t numberOfMinibatches = 0;
 
         auto checkpoint = m_crossValidationSource->GetCheckpointState();
         size_t sampleCount = 0;
-        while (GetCrossValidationMinibatch(minibatch, m_crossValidationSchedule[sampleCount], computeDevice))
+        do
         {
+            if (!GetCrossValidationMinibatch(minibatch, m_crossValidationSchedule[sampleCount], computeDevice))
+            {
+                break;
+            }
+
+            OnCrossValidationMinibatchStart();
             error = m_trainer->TestMinibatch(minibatch, computeDevice, sampleCount);
-            accumulatedError += error;
-            totalNumberOfSamples += sampleCount;
-            numberOfMinibatches++;
-        }
+            OnCrossValidationMinibatchEnd(currentIndex, error, sampleCount);
+        } while (true);
         m_crossValidationSource->RestoreFromCheckpoint(checkpoint);
 
-        OnCrossValidationEnd(currentIndex, accumulatedError / totalNumberOfSamples, totalNumberOfSamples, numberOfMinibatches);
+        OnCrossValidationEnd(currentIndex);
     }
 
     inline void TrainingSession::ReportProgress(size_t currentIndex)

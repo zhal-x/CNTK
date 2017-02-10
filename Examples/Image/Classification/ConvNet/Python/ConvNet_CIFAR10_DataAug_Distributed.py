@@ -6,7 +6,6 @@
 
 from __future__ import print_function
 import os
-import sys
 import math
 import argparse
 import numpy as np
@@ -165,7 +164,8 @@ def convnet_cifar10_dataaug(train_data, test_data, mean_data, minibatch_size=64,
 
     tensorboard_writer = cntk.utils.TensorBoardProgressWriter(
         freq=num_mbs_per_log,
-        log_dir=os.path.join('log', 'worker-' + str(cntk.distributed.Communicator.rank())),
+        log_dir='log',
+        rank=cntk.distributed.Communicator.rank(),
         model=network['output'])
 
     trainer = create_trainer(network, epoch_size, num_quantization_bits, block_size, warm_up)
@@ -176,6 +176,7 @@ def convnet_cifar10_dataaug(train_data, test_data, mean_data, minibatch_size=64,
  
 
 if __name__=='__main__':
+
     parser = argparse.ArgumentParser()
     data_path  = os.path.join(abs_path, "..", "..", "..", "DataSets", "CIFAR-10")
 
