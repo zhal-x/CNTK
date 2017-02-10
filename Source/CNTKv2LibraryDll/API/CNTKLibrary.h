@@ -2553,6 +2553,11 @@ namespace CNTK
         /// (e.g. for use as a fixed feature extractor)
         ///
         Freeze,
+
+        ///
+        /// Internal use only
+        ///
+        Invalid,
     };
 
     ///
@@ -2640,6 +2645,8 @@ namespace CNTK
         /// crossing of dll boundary.
         ///
         CNTK_API virtual void InferOutputs(std::vector<Variable>& outputs) = 0;
+
+        CNTK_API virtual FunctionPtr Clone(const std::vector<Variable>& /*clonedInputs*/) { NOT_IMPLEMENTED; }
 
     public:
 
