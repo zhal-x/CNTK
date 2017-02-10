@@ -195,8 +195,6 @@ if __name__=='__main__':
         log_dir = args['logdir']
     if args['device'] is not None:
         cntk.device.set_default_device(cntk.device.gpu(args['device']))
-    if args['profile'] is not None:
-        turn_on_profile = args['profile']
 
     mean_data=os.path.join(data_path, 'CIFAR-10_mean.xml')
     train_data=os.path.join(data_path, 'train_map.txt')
