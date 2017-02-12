@@ -218,6 +218,8 @@ namespace CNTK
         std::unordered_map<Variable, ValuePtr> parameterGradients;
         ExecuteForwardBackward(arguments, outputsToFetch, computeDevice, parameterGradients);
 
+        AccumulatePrevMinibatch(computeDevice);
+
         auto profWeights = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainWeights);
 
         std::unordered_map<Parameter, NDArrayViewPtr> gradients;
@@ -255,6 +257,9 @@ namespace CNTK
         MinibatchInfo info{ arguments.empty(), sweepEnd, m_prevMinibatchNumSamples, trainingLoss, evalCriterion };
         bool updated = m_parameterLearners->Update(gradients, info);
         m_prevMinibatchNumSamples = info.numberOfSamples;
+
+        // must accumulate after aggregation
+        AccumulatePrevMinibatch(computeDevice);
 
         // Update internal state.
         if (emptyMinibatch)
@@ -379,8 +384,6 @@ namespace CNTK
         // TODO: Why Backward signature does not take Parameter instead of Variable for gradients?
         m_combinedTrainingFunction->Backward(backPropSate, { { m_aggregatedLossFunction, m_rootGradientValue } }, parameterGradients);
         m_prevMinibatchNumSamples = GetSampleCount(m_trainingSampleCountVar, outputs[m_trainingSampleCountVar]);
-
-        AccumulatePrevMinibatch(computeDevice);
     }
 
     static std::wstring GetTrainerStateCheckpointFilePath(const std::wstring& modelFilePath)
