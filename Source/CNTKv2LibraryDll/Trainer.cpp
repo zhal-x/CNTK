@@ -258,9 +258,6 @@ namespace CNTK
         bool updated = m_parameterLearners->Update(gradients, info);
         m_prevMinibatchNumSamples = info.numberOfSamples;
 
-        // must accumulate after aggregation
-        AccumulatePrevMinibatch(computeDevice);
-
         // Update internal state.
         if (emptyMinibatch)
         {
@@ -268,6 +265,10 @@ namespace CNTK
             m_prevMinibatchAggregateEvalCriterionValue = std::make_shared<Value>(info.evalCriterionValue);
             m_prevMinibatchAggregateTrainingLossValue = std::make_shared<Value>(info.trainingLossValue);
         }
+
+        // must accumulate after aggregation
+        AccumulatePrevMinibatch(computeDevice);
+
         return updated;
     }
 
