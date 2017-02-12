@@ -328,7 +328,10 @@ namespace CNTK
         };
 
         bool createdLoss = CreateIfDifferent_Add(m_accumulatedTrainingLossValue, m_prevMinibatchAggregateTrainingLossValue);
-        bool createdEval = CreateIfDifferent_Add(m_accumulatedEvalCriterionValue, m_prevMinibatchAggregateEvalCriterionValue);
+        bool createdEval =
+            m_aggregatedEvaluationFunction ?
+            CreateIfDifferent_Add(m_accumulatedEvalCriterionValue, m_prevMinibatchAggregateEvalCriterionValue) :
+            false;
 
         if ((createdLoss || createdEval) && m_accumulatedNumSamples != 0)
             RuntimeError("Accumulation values are created when accumulated num samples not zero");
