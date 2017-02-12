@@ -1,9 +1,9 @@
 import cntk as C
 import numpy as np
 from cntk.io import MinibatchSource, HTKDeserializers, StreamDef, StreamDefs
-from cntk.blocks import LSTM, Placeholder, Input 
+from cntk.blocks import LSTM, Placeholder, Input
 from cntk.layers import Recurrence, Dense, BatchNormalization
-from cntk.models import Sequential, LayerStack
+from cntk.models import Sequential, For
 
 import os, sys
 abs_path = os.path.dirname(os.path.abspath(__file__))
@@ -17,9 +17,9 @@ def test_htk_deserializers():
     feature_dim = 33
     num_classes = 132
     context = 2
-    
+
     os.chdir(data_path)
-    
+
     features_file = "glob_0000.scp"
     labels_file = "glob_0000.mlf"
     label_mapping_file = "state.list"
@@ -32,18 +32,18 @@ def test_htk_deserializers():
     labels = C.input_variable((num_classes))
 
     model = Sequential([BatchNormalization(),
-                        LayerStack(3, lambda : Recurrence(LSTM(256))),
+                        For(range(3), lambda : Recurrence(LSTM(256))),
                         Dense(num_classes)])
     z = model(features)
     ce = C.cross_entropy_with_softmax(z, labels)
     errs = C.classification_error    (z, labels)
 
     learner = C.adam_sgd(z.parameters,
-                    lr=C.learning_rate_schedule(lr, C.UnitType.sample, epoch_size), 
+                    lr=C.learning_rate_schedule(lr, C.UnitType.sample, epoch_size),
                     momentum=C.momentum_as_time_constant_schedule(1000),
                     low_memory=True,
                     gradient_clipping_threshold_per_sample=15, gradient_clipping_with_truncation=True)
-    trainer = C.Trainer(z, ce, errs, learner)
+    trainer = C.Trainer(z, (ce, errs), learner)
 
     input_map={ features: reader.streams.features, labels: reader.streams.labels }
 
