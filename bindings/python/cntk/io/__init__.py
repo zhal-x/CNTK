@@ -315,20 +315,8 @@ class ReaderConfig(dict):
 
 class ImageTransofrm:
     '''
-    This class configures the image reader that reads images and corresponding
-    labels from a file of the form::
-
-         <full path to image> <tab> <numerical label (0-based class id)>
-    or::
-
-        sequenceId <tab> path <tab> label
-
-    Args:
-        filename (str): file name of the map file that associates images to
-         classes
-
-    See also:
-        `Image reader definition <https://github.com/microsoft/cntk/wiki/Image-reader>`_
+    This class acts as a namespace for various image transforms such as cropping
+    scaling mean subtraction etc.
     '''
 
     @staticmethod
@@ -463,6 +451,22 @@ class ImageTransofrm:
     #    return dict(type='Intensity', intensityStdDev=intensity_stddev, intensityFile=intensity_file)
 
 def ImageDeserializer(filename, streams):
+    '''
+    Configures the image reader that reads images and corresponding
+    labels from a file of the form::
+
+         <full path to image> <tab> <numerical label (0-based class id)>
+    or::
+
+        sequenceId <tab> path <tab> label
+
+    Args:
+        filename (str): file name of the map file that associates images to
+         classes
+
+    See also:
+        `Image reader definition <https://github.com/microsoft/cntk/wiki/Image-reader>`_
+    '''
     image_stream_name = None
     label_stream_name = '_ignore_labels_'
     num_labels = 2
@@ -503,29 +507,37 @@ def CTFDeserializer(filename, streams):
     return cntk_py.Deserializer_ctfdeserializer(filename, sc)
 
 def HTKDeserializers(label_mapping_file, streams):
-    ret = []
-    mlf = None
+    '''
+    Configures the HTK reader that reads speech data in HTK format.
+    
+    Args:
+        label_mapping_file (str): path to the label mapping file
+        streams: any dictionary-like object that contains a mapping from stream names 
+            to StreamDef objects. Each StreamDef object configures an HTK deserializer.
+            If a stream name starts with "label" an HTKMLFDeserializer is used,
+            otherwise an HTKFeatureDeserializer is used.
+    '''
+    feat = []
+    mlf = []
     for stream_name in streams:
         s = streams[stream_name]
         dimension = s.dim
-        if stream_name == "labels":
+        if stream_name.startswith("label"):
             mlf_file = s.stream_alias
-            mlf = cntk_py.Deserializer_htkmlfdeserializer(stream_name, label_mapping_file, dimension, [mlf_file])
+            mlf.append(cntk_py.Deserializer_htkmlfdeserializer(stream_name, label_mapping_file, dimension, [mlf_file]))
         else:
             s = streams[stream_name]
             scp_file = s.stream_alias
             dimension = s.dim
             left_context, right_context = s.context if 'context' in s else (1,1) 
             prefix_path = s.paths[0] if 'paths' in s else '' 
-            des = cntk_py.Deserializer_htkfeature_deserializer(stream_name, scp_file, dimension, left_context, right_context, prefix_path)
-            ret.append(des)
-    if mlf is None:
-        raise ValueError("no label stream found")
-    if len(ret) == 0:
-        raise ValueError("no feature stream found")
+            feat.append(cntk_py.Deserializer_htkfeature_deserializer(stream_name, scp_file, dimension, left_context, right_context, prefix_path))
+    if len(mlf) == 0:
+        raise ValueError("no label streams found")
+    if len(feat) == 0:
+        raise ValueError("no feature streams found")
     #Ensure MLF is at the end of the list of deserializers
-    ret.append(mlf)
-    return ret
+    return feat+mlf
 
 # TODO: this should be a private class; use StreamDef instead
 class StreamConfiguration(cntk_py.StreamConfiguration):
