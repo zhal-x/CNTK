@@ -269,11 +269,10 @@ namespace CNTK
 
     void MPICommunicatorImpl::AggregateInPlace(
         const std::vector<NDArrayViewPtr>& values,
-        const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers,
-        size_t packThresholdSize = DEFAULT_PACK_THRESHOLD_SIZE_IN_BYTES)
+        const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers)
+        // size_t packThresholdSize = DEFAULT_PACK_THRESHOLD_SIZE_IN_BYTES)
     {
         auto device = GetNonCPUDevice(values);
-        m_packThresholdSizeInBytes = packThresholdSize;
         if (device.Type() != DeviceKind::CPU)
         {
             // Since we will be copying the gradients asynchronously, let us
@@ -293,6 +292,8 @@ namespace CNTK
         const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers)
     {
         CheckWorkers(sendToWorkers);
+
+        m_packThresholdSizeInBytes = DEFAULT_PACK_THRESHOLD_SIZE_IN_BYTES;
 
         if (m_mpi->NumNodesInUse() == 1) // No need to aggregate anything.
             return;
@@ -321,19 +322,21 @@ namespace CNTK
             }
         }
 
-        class Elemtype;
+/*
+        class float;
         if (inputValues[0]->GetDataType() == DataType::Float)
-            typedef float Elemtype;
+            typedef float float;
         else if (inputValues[0]->GetDataType() == DataType::Double)
-            typedef double Elemtype;
+            typedef double float;
         else
             LogicError("Unknown DataType");
-        std::unique_ptr<Matrix<Elemtype>> m_aggregationBuffer;
+*/
+        std::unique_ptr<Matrix<float>> m_aggregationBuffer;
         if (packedGradientsSizeInBytes > 0)
         {
             
-            m_aggregationBuffer.reset(new (std::nothrow) Matrix<Elemtype>(1, packedGradientsSizeInBytes / sizeof(inputValues[0]->GetDataType()), CPUDEVICE));
-            if (m_aggregationBuffer == nullptr)
+            m_aggregationBuffer.reset(new (std::nothrow) Matrix<float>(1, packedGradientsSizeInBytes / sizeof(inputValues[0]->GetDataType()), CPUDEVICE));
+            if (m_aggregationBuffer == 0)
             {
                 packedGradientsSizeInBytes = 0;
                 packedGradientsIndex.clear();
@@ -347,7 +350,7 @@ namespace CNTK
                 size_t offset = 0;
                 for (size_t i : packedGradientsIndex)
                 {
-                    auto gradient = GetWritableMatrix<Elemtype>(inputValues[i]);
+                    auto gradient = GetWritableMatrix<float>(inputValues[i]);
                     m_aggregationBuffer->ColumnSlice(offset, gradient->GetNumElements()).AssignValuesOf(gradient->Reshaped(1, gradient->GetNumElements()));
                     offset += gradient->GetNumElements();
                 }
@@ -448,13 +451,11 @@ namespace CNTK
             size_t offset = 0;
             for (size_t i : packedGradientsIndex)
             {
-                auto gradient = GetWritableMatrix<Elemtype>(inputValues[i]);
+                auto gradient = GetWritableMatrix<float>(outputValues[i]);
                 gradient->AssignValuesOf(m_aggregationBuffer->ColumnSlice(offset, gradient->GetNumElements()).Reshaped(gradient->GetNumRows(), gradient->GetNumCols()));
                 offset += gradient->GetNumElements();
                 ::CNTK::NDShape shapet{ gradient->GetNumElements() };
-                NDArrayViewPtr datat = ::CNTK::MakeSharedObject<::CNTK::NDArrayView>(outputValues[i]->GetDataType(), shapet, m_aggregationBuffer->Data(),
-                    packedGradientsSizeInBytes, outputValues[i]->Device());
-                // Assign the values back to outputValues
+                NDArrayViewPtr datat = ::CNTK::MakeSharedObject<::CNTK::NDArrayView>(outputValues[i]->GetDataType(), shapet, gradient->Data(), gradient->GetNumElements(), outputValues[i]->Device());
             }
         }
 
