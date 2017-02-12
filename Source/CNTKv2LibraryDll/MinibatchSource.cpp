@@ -433,44 +433,39 @@ namespace CNTK
         return ctf;
     }
 
-    /* static */ Deserializer Deserializer::HTKFeatureDeserializer(const std::wstring& fileName, size_t dimension, size_t leftContextSize, size_t rightContextSize, const std::wstring& prefixPath)
+    /* static */ Deserializer Deserializer::HTKFeatureDeserializer(const std::wstring& streamName, const std::wstring& fileName, size_t dimension, size_t leftContextSize, size_t rightContextSize, const std::wstring& prefixPath)
     {
         Deserializer htk;
+        Dictionary stream;
+        Dictionary features;
         std::vector<DictionaryValue> ctxWindow = { DictionaryValue(leftContextSize), DictionaryValue(rightContextSize) };
-        htk.AddConfig(L"scpFile", fileName, L"dim", dimension, L"contextWindow", ctxWindow, L"prefixPathInSCP", prefixPath);
+        features[L"scpFile"] = fileName;
+        features[L"dim"] = dimension;
+        features[L"contextWindow"] = ctxWindow;
+        if (prefixPath.size() != 0)
+            features[L"prefixPathInSCP"] = prefixPath;
+        stream[streamName] = features;
+        htk.AddConfig(L"type", L"HTKFeatureDeserializer", L"input", stream);
         return htk;
     }
 
-    /* static */ Deserializer Deserializer::HTKMLFDeserializer(const std::wstring& labelMappingFile, size_t dimension, const std::wstring& mlfFile, const std::vector<std::wstring> mlfFileList)
+    /* static */ Deserializer Deserializer::HTKMLFDeserializer(const std::wstring& streamName, const std::wstring& labelMappingFile, size_t dimension, const std::vector<std::wstring> mlfFiles)
     {
         Deserializer htk;
-        htk.AddConfig(L"labelMappingFile", labelMappingFile, L"dim", dimension);
-        if (mlfFile == L"")
-        {
-            if (mlfFileList.size() == 0)
-                LogicError("HTKMLFDeserializer: neither mlfFileList nor mlfFile were specified");
-            std::vector<DictionaryValue> actualList;
-            std::transform(mlfFileList.begin(), mlfFileList.end(), std::back_inserter(actualList), [](const std::wstring& s) {return static_cast<DictionaryValue>(s); });
-            htk.AddConfig(L"mlfFileList", actualList);
-        }
+        Dictionary stream;
+        Dictionary labels;
+        labels[L"labelMappingFile"] = labelMappingFile;
+        labels[L"dim"] = dimension;
+        std::vector<DictionaryValue> actualFiles;
+        std::transform(mlfFiles.begin(), mlfFiles.end(), std::back_inserter(actualFiles), [](const std::wstring& s) {return static_cast<DictionaryValue>(s); });
+        if (actualFiles.size() > 1)
+            labels[L"mlfFileList"] = actualFiles;
+        else if (actualFiles.size() == 1)
+            labels[L"mlfFile"] = actualFiles[0];
         else
-        {
-            if (mlfFileList.size() != 0)
-                LogicError("HTKMLFDeserializer: both mlfFileList and mlfFile were specified");
-            htk.AddConfig(L"mlfFile", mlfFile);
-        }
+            LogicError("HTKMLFDeserializer: No mlf files were specified");
+        stream[streamName] = labels;
+        htk.AddConfig(L"type", L"HTKMLFDeserializer", L"input", stream);
         return htk;
-    }
-
-    ReaderConfig::ReaderConfig(std::vector<Deserializer> deserializers, 
-        size_t epochSize, bool randomize, size_t memoryBudget, const std::unordered_map<std::wstring, DictionaryValue>& additionalOptions)
-    {
-        std::vector<DictionaryValue> actualDeserializers;
-        //TODO: make this work with implicit conversion 
-        //std::transform(deserializers.begin(), deserializers.end(), std::back_inserter(actualDeserializers), [](const Deserializer& d) { return static_cast<DictionaryValue>(d); });
-        std::transform(deserializers.begin(), deserializers.end(), std::back_inserter(actualDeserializers), [](const Deserializer& d) { return d.AsDictionaryValue(); });
-        AddConfig(L"deserializers", actualDeserializers, L"epochSize", epochSize, L"randomize", randomize, L"randomizationWindow", memoryBudget);
-        for (const auto& entry : additionalOptions)
-            AddConfig(entry.first.c_str(), entry.second);
     }
 }

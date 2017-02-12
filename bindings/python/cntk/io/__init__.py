@@ -242,15 +242,9 @@ def _py_dict_to_cntk_dict(py_dict):
             res[k] = cntk_py.DictionaryValueFromDict(_py_dict_to_cntk_dict(v))
         # TODO: add support to list of lists ?
         elif isinstance(v, list):
-            l = []
-            for e in v:
-                if isinstance(e, dict):
-                    l.append(cntk_py.DictionaryValueFromDict(
-                        _py_dict_to_cntk_dict(e)))
-                else:
-                    l.append(e.as_dictionary_value())
-                    #l.append(cntk_py.DictionaryValue(e))
-            res[k] = cntk_py.DictionaryValue(l)
+            res[k] = cntk_py.DictionaryValue([
+                cntk_py.DictionaryValueFromDict(_py_dict_to_cntk_dict(e)) 
+                if isinstance(e, dict) else e.as_dictionary_value() for e in v])
         else:
             res[k] = cntk_py.DictionaryValue(v)
     return res
@@ -318,51 +312,6 @@ class ReaderConfig(dict):
             instance of :class:`MinibatchSource`
         '''
         return minibatch_source(self)
-
-class Deserializer(cntk_py.Deserializer):
-    '''
-    Base deserializer class that can be used in the :class:`ReaderConfig`. A
-    deserializer is responsible for deserialization of input from external
-    storage into in-memory sequences.
-
-    Currently CNTK supports the below deserializers:
-
-    ========================== ============
-    Deserializer type          Description
-    ========================== ============
-    :class:`ImageDeserializer` Deserializer for images that uses OpenCV
-    :class:`CTFDeserializer`   Deserializer for text of the `CNTKTextReader format <https://github.com/microsoft/cntk/wiki/CNTKTextFormat-Reader>`_
-    ========================== ============
-
-    Args:
-        type (str): type of the deserializer
-
-    See also:
-        https://github.com/microsoft/cntk/wiki/Understanding-and-Extending-Readers
-    '''
-
-    def __init__(self, type):
-        pass
-
-def ImageDeserializer(filename, streams):
-    image_stream_name = None
-    label_stream_name = '_ignore_labels_'
-    num_labels = 2
-    transforms = []
-    for key in streams:
-        s = streams[key]
-        alias = s.stream_alias
-        if alias == "image":
-            image_stream_name = key
-            transforms = s.transforms
-        elif alias == "label":
-            label_stream_name = key
-            num_labels = s.dim
-        else:
-            raise ValueError("ImageDeserializer: invalid field name '{}', allowed are 'image' and 'label'".format(alias))
-    if image_stream_name is None:
-        raise ValueError("ImageDeserializer: image stream name not specified")
-    return cntk_py.Deserializer_image_deserializer(filename, label_stream_name, num_labels, image_stream_name, transforms)
 
 class ImageTransofrm:
     '''
@@ -513,9 +462,29 @@ class ImageTransofrm:
     #        dict describing the mean transform        '''
     #    return dict(type='Intensity', intensityStdDev=intensity_stddev, intensityFile=intensity_file)
 
+def ImageDeserializer(filename, streams):
+    image_stream_name = None
+    label_stream_name = '_ignore_labels_'
+    num_labels = 2
+    transforms = []
+    for key in streams:
+        s = streams[key]
+        alias = s.stream_alias
+        if alias == "image":
+            image_stream_name = key
+            transforms = s.transforms
+        elif alias == "label":
+            label_stream_name = key
+            num_labels = s.dim
+        else:
+            raise ValueError("ImageDeserializer: invalid field name '{}', allowed are 'image' and 'label'".format(alias))
+    if image_stream_name is None:
+        raise ValueError("ImageDeserializer: image stream name not specified")
+    return cntk_py.Deserializer_image_deserializer(filename, label_stream_name, num_labels, image_stream_name, transforms)
+
 def CTFDeserializer(filename, streams):
     '''
-    This class configures the text reader that reads text-encoded files from a
+    Configures the text reader that reads text-encoded files from a
     file with lines of the form::
 
         [Sequence_Id](Sample)+
@@ -533,6 +502,30 @@ def CTFDeserializer(filename, streams):
     sc = [cntk_py.StreamConfiguration(k, s.dim, s.is_sparse, s.stream_alias) for k,s in streams.items()]
     return cntk_py.Deserializer_ctfdeserializer(filename, sc)
 
+def HTKDeserializers(label_mapping_file, streams):
+    ret = []
+    mlf = None
+    for stream_name in streams:
+        s = streams[stream_name]
+        dimension = s.dim
+        if stream_name == "labels":
+            mlf_file = s.stream_alias
+            mlf = cntk_py.Deserializer_htkmlfdeserializer(stream_name, label_mapping_file, dimension, [mlf_file])
+        else:
+            s = streams[stream_name]
+            scp_file = s.stream_alias
+            dimension = s.dim
+            left_context, right_context = s.context if 'context' in s else (1,1) 
+            prefix_path = s.paths[0] if 'paths' in s else '' 
+            des = cntk_py.Deserializer_htkfeature_deserializer(stream_name, scp_file, dimension, left_context, right_context, prefix_path)
+            ret.append(des)
+    if mlf is None:
+        raise ValueError("no label stream found")
+    if len(ret) == 0:
+        raise ValueError("no feature stream found")
+    #Ensure MLF is at the end of the list of deserializers
+    ret.append(mlf)
+    return ret
 
 # TODO: this should be a private class; use StreamDef instead
 class StreamConfiguration(cntk_py.StreamConfiguration):
@@ -550,36 +543,23 @@ class StreamConfiguration(cntk_py.StreamConfiguration):
         stream_alias (str, default ''): name of the stream in the file that is fed to the
          :func:`text_format_minibatch_source`
     '''
-
     def __init__(self, name, dim, is_sparse=False, stream_alias=''):
         return super(StreamConfiguration, self).__init__(name, dim, is_sparse, stream_alias)
-
-# wrapper around text_format_minibatch_source() that attaches a record of streams
-# TODO: This should not exist; use MinibatchSource(CTFDeserializer(...))
-def _unused_CNTKTextFormatMinibatchSource(path, streams, epoch_size=None): # TODO: delete this
-    from cntk.utils import _ClassFromDict
-    # convert streams into StreamConfiguration format
-    # TODO: stream_alias should default to 'key'
-    stream_configs = [ StreamConfiguration(key, dim=value.dim, is_sparse=value.is_sparse, stream_alias=value.stream_alias) for (key, value) in streams.items() ]
-    if epoch_size is not None:  # TODO: use MAX_UI64, now that we have access
-        source = text_format_minibatch_source(path, stream_configs, epoch_size)
-    else:
-        source = text_format_minibatch_source(path, stream_configs)
-    # attach a dictionary of the streams
-    source.streams = _ClassFromDict({ name : source.stream_info(name) for name in streams.keys() })
-    return source
-
 
 # stream definition for use in StreamDefs
 # returns a record { stream_alias, is_sparse, optional dim, optional transforms }
 from cntk.utils import Record
-def StreamDef(field, shape=None, is_sparse=False, transforms=None):
+def StreamDef(field, shape=None, is_sparse=False, transforms=None, context=None, paths=None):
     # note: the names used inside here are required by the C++ code which looks them up in a dictionary
     config = dict(stream_alias=field, is_sparse=is_sparse)
     if shape is not None:
         config['dim'] = shape
     if transforms is not None:
         config['transforms'] = transforms
+    if context is not None:
+        config['context'] = context
+    if paths is not None:
+        config['paths'] = paths
     return Record(**config)
     # TODO: we should always use 'shape' unless it is always rank-1 or a single rank's dimension
     # TODO: dim should be inferred from the file, at least for dense

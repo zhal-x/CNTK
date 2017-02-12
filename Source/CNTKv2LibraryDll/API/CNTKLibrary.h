@@ -4449,26 +4449,13 @@ namespace CNTK
         /// 
         /// Create an HTKFeatureDeserializer with the specified options
         /// 
-        CNTK_API static Deserializer HTKFeatureDeserializer(const std::wstring& fileName, size_t dimension, size_t leftContextSize = 1, size_t rightContextSize = 1, const std::wstring& prefixPath = L"");
+        CNTK_API static Deserializer HTKFeatureDeserializer(const std::wstring& streamName, const std::wstring& fileName, size_t dimension, size_t leftContextSize = 1, size_t rightContextSize = 1, const std::wstring& prefixPath = L"");
 
         /// 
         /// Create an HTKMLFDeserializer with the specified options
         /// 
-        CNTK_API static Deserializer HTKMLFDeserializer(const std::wstring& labelMappingFile, size_t dimension, const std::wstring& mlfFile = L"", const std::vector<std::wstring> mlfFileList = {});
-    };
-    
-    // There's already a readerConfiguration; are we duplicating things?
-    class ReaderConfig : public Record {
-        ReaderConfig() {}
-    public:
-        /// 
-        /// Create a ReaderConfig with the specified options
-        /// 
-        CNTK_API ReaderConfig(std::vector<Deserializer> deserializers,
-            size_t epochSize = MinibatchSource::InfinitelyRepeat, 
-            bool randomize = true, 
-            size_t memoryBudget = MinibatchSource::DefaultRandomizationWindow, 
-            const std::unordered_map<std::wstring, DictionaryValue>& additionalOptions = {});
+        CNTK_API static Deserializer Deserializer::HTKMLFDeserializer(const std::wstring& streamName, const std::wstring& labelMappingFile, size_t dimension, const std::vector<std::wstring> mlfFiles);
+
     };
 
 

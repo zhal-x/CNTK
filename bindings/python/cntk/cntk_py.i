@@ -79,6 +79,8 @@
 %ignore CNTK::TrainingParameterSchedule::operator=;
 %ignore CNTK::TrainingParameterSchedule::operator[];
 
+%ignore CNTK::Record::operator[];
+
 // renaming overloads for TrainMinibatch and TestMinibatch that take a map 
 // of Variables and MinibatchData as their first parameter. If this is not done, 
 // the overloads that are legal in C++ will be shadowed and ignored by SWIG.
@@ -124,7 +126,9 @@
 %template() std::vector<std::pair<size_t, size_t>>;
 %template() std::vector<std::pair<CNTK::Variable, CNTK::Variable>>;
 %template() std::vector<CNTK::ImageTransform>;
+%template() std::vector<std::wstring>;
 %template() std::pair<std::vector<std::shared_ptr<CNTK::NDArrayView>>, std::vector<bool>>;
+
 
 // They are defined twice under CNTK::Internal and under CNTK namespace
 %ignore CNTK::Internal::Combine;
